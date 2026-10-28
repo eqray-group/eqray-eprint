@@ -97,20 +97,27 @@ func (s *StatisticsService) countOrders(ctx context.Context, apply func(db.Query
 	return query.Count()
 }
 
-// sumPaidAmount 统计今日支付金额，SUM 返回 NULL 时按 0 处理。
-func (s *StatisticsService) sumPaidAmount(ctx context.Context, today time.Time) (int64, error) {
-	var total int64
+// paidAmountRow 承接 SUM(pay_amount) 的聚合结果。
+type paidAmountRow struct {
+	Total int64 `db:"total" json:"total"`
+}
 
+// sumPaidAmount 统计今日支付金额；当天没有支付记录时 SUM 返回 NULL，
+// 直接扫进 int64 会报 Scan error，这里用 COALESCE 兜底成 0。
+func (s *StatisticsService) sumPaidAmount(ctx context.Context, today time.Time) (int64, error) {
+	// 聚合结果只有一行，用 First 按结构体扫描
+	var row paidAmountRow
 	err := facades.DB().WithContext(ctx).Table(model.PrintOrderTable).
 		Where("pay_status", printEnums.PayStatusPaid).
 		Where("pay_time", ">=", today).
 		WhereNull("deleted_at").
-		Sum("pay_amount", &total)
+		Select("COALESCE(SUM(pay_amount), 0) AS total").
+		First(&row)
 	if err != nil {
 		return 0, err
 	}
 
-	return total, nil
+	return row.Total, nil
 }
 
 // startOfToday 返回本地时区当天 00:00:00，统计口径与业务时区一致。
