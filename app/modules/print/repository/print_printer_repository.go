@@ -58,6 +58,7 @@ func (r *PrintPrinterRepository) Update(ctx context.Context, m *model.PrintPrint
 		Where("id", m.ID).
 		WhereNull("deleted_at").
 		Update(map[string]any{
+			"print_shop_id":  m.PrintShopID,
 			"name":           m.Name,
 			"system_name":    m.SystemName,
 			"model":          m.Model,
@@ -102,6 +103,22 @@ func (r *PrintPrinterRepository) FindByID(ctx context.Context, id types.ID) (*mo
 	}
 
 	return &m, nil
+}
+
+// ListByDevice 查询某设备下的全部打印机（含停用），客户端上报时据此算增删改。
+// 未命中返回空切片；只过滤软删记录，不按状态过滤。
+func (r *PrintPrinterRepository) ListByDevice(ctx context.Context, deviceID types.ID) ([]model.PrintPrinterModel, error) {
+	list := make([]model.PrintPrinterModel, 0)
+
+	if err := facades.DB().WithContext(ctx).Table(printerTable).
+		Where("device_id", deviceID).
+		WhereNull("deleted_at").
+		OrderBy("id", "asc").
+		Get(&list); err != nil {
+		return nil, err
+	}
+
+	return list, nil
 }
 
 // ListEnabledByShop 查询门店下启用的打印机，路由能力匹配用。

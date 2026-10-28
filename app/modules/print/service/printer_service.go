@@ -13,6 +13,20 @@ import (
 	"eqray-eprint/app/modules/print/repository"
 )
 
+// PrinterReportItem 是客户端上报的一台本机打印机及其能力配置。
+// SystemName 为 Windows 打印队列名，是同一设备内的唯一标识。
+type PrinterReportItem struct {
+	SystemName    string
+	Name          string
+	Model         string
+	PaperTypes    string
+	ColorSupport  int8
+	DuplexSupport int8
+}
+
+// maxReportPrinters 限制单次上报的打印机数量，避免客户端误传超长数组。
+const maxReportPrinters = 50
+
 // PrinterInput 是打印机新增 / 编辑入参，能力字段由门店后台勾选。
 type PrinterInput struct {
 	PrintShopID   types.ID
@@ -150,6 +164,131 @@ func (s *PrinterService) Disable(ctx context.Context, id types.ID, updater strin
 // ListEnabled 查询门店启用的打印机，供能力服务比对。
 func (s *PrinterService) ListEnabled(ctx context.Context, shopID types.ID) ([]model.PrintPrinterModel, error) {
 	return s.printers.ListEnabledByShop(ctx, shopID)
+}
+
+// ListByDevice 返回设备下已上报的打印机（含停用），客户端用来回填勾选状态与能力。
+func (s *PrinterService) ListByDevice(ctx context.Context, deviceID types.ID) ([]model.PrintPrinterModel, error) {
+	return s.printers.ListByDevice(ctx, deviceID)
+}
+
+// SyncDevicePrinters 用客户端勾选结果覆盖设备的打印机集合。
+// 参数 device 为设备记录，items 为本次勾选的完整集合：已存在的按队列名更新并启用，
+// 新增的直接创建，本次未上报的停用（不物理删除，保留历史任务引用）。
+// 返回同步后的完整列表。
+func (s *PrinterService) SyncDevicePrinters(ctx context.Context, device *model.PrintDeviceModel, items []PrinterReportItem) ([]model.PrintPrinterModel, error) {
+	if device == nil {
+		return nil, baseErrs.WithMsg(baseErrs.BadRequest, "设备不能为空")
+	}
+	if len(items) > maxReportPrinters {
+		return nil, baseErrs.WithMsg(baseErrs.BadRequest, "单次最多上报 50 台打印机")
+	}
+
+	existing, err := s.printers.ListByDevice(ctx, device.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Windows 队列名不区分大小写，这里统一用小写键匹配，避免仅大小写变化时重复创建
+	bySystem := make(map[string]*model.PrintPrinterModel, len(existing))
+	for i := range existing {
+		bySystem[strings.ToLower(existing[i].SystemName)] = &existing[i]
+	}
+
+	seen := make(map[string]bool, len(items))
+	for _, raw := range items {
+		item, err := normalizeReportItem(raw)
+		if err != nil {
+			return nil, err
+		}
+		key := strings.ToLower(item.SystemName)
+		if seen[key] {
+			return nil, baseErrs.WithMsg(baseErrs.BadRequest, "打印机【"+item.SystemName+"】重复上报")
+		}
+		seen[key] = true
+
+		if printer, ok := bySystem[key]; ok {
+			printer.PrintShopID = device.PrintShopID
+			printer.Name = item.Name
+			printer.Model = item.Model
+			printer.PaperTypes = item.PaperTypes
+			printer.ColorSupport = item.ColorSupport
+			printer.DuplexSupport = item.DuplexSupport
+			printer.Status = printEnums.StatusEnabled
+
+			if err := s.printers.Update(ctx, printer); err != nil {
+				return nil, err
+			}
+
+			continue
+		}
+
+		printer := &model.PrintPrinterModel{
+			PrintShopID:   device.PrintShopID,
+			DeviceID:      device.ID,
+			Name:          item.Name,
+			SystemName:    item.SystemName,
+			Model:         item.Model,
+			PaperTypes:    item.PaperTypes,
+			ColorSupport:  item.ColorSupport,
+			DuplexSupport: item.DuplexSupport,
+			Status:        printEnums.StatusEnabled,
+		}
+		printer.ID = support.NewID()
+
+		if err := s.printers.Create(ctx, printer); err != nil {
+			if support.IsDuplicate(err) {
+				return nil, baseErrs.New(printErrs.PrinterNameExists, item.SystemName)
+			}
+
+			return nil, err
+		}
+	}
+
+	// 本次未勾选的打印机统一停用：队列已不存在或用户主动取消上报
+	for i := range existing {
+		if seen[strings.ToLower(existing[i].SystemName)] || existing[i].Status != printEnums.StatusEnabled {
+			continue
+		}
+		if err := s.printers.Disable(ctx, existing[i].ID, "打印客户端"); err != nil {
+			return nil, err
+		}
+	}
+
+	return s.printers.ListByDevice(ctx, device.ID)
+}
+
+// normalizeReportItem 清洗客户端上报的打印机字段并校验能力取值。
+// 返回归一化后的条目；队列名为空或纸张能力非法时返回 400 业务错误。
+func normalizeReportItem(in PrinterReportItem) (PrinterReportItem, error) {
+	in.SystemName = strings.TrimSpace(in.SystemName)
+	in.Name = strings.TrimSpace(in.Name)
+	in.Model = strings.TrimSpace(in.Model)
+
+	if in.SystemName == "" {
+		return in, baseErrs.WithMsg(baseErrs.BadRequest, "打印队列名称不能为空")
+	}
+	if len(in.SystemName) > 128 {
+		return in, baseErrs.WithMsg(baseErrs.BadRequest, "打印队列名称不能超过 128 个字符")
+	}
+	if in.Name == "" {
+		in.Name = in.SystemName
+	}
+	if len(in.Name) > 64 || len(in.Model) > 64 {
+		return in, baseErrs.WithMsg(baseErrs.BadRequest, "打印机名称与型号不能超过 64 个字符")
+	}
+
+	in.PaperTypes = normalizePaperTypes(in.PaperTypes)
+	if in.PaperTypes == "" {
+		return in, baseErrs.WithMsg(baseErrs.BadRequest, "打印机【"+in.SystemName+"】至少选择一种纸张")
+	}
+	if in.ColorSupport != 0 && in.ColorSupport != 1 {
+		return in, baseErrs.WithMsg(baseErrs.BadRequest, "打印机【"+in.SystemName+"】彩色能力取值不合法")
+	}
+	if in.DuplexSupport != 0 && in.DuplexSupport != 1 {
+		return in, baseErrs.WithMsg(baseErrs.BadRequest, "打印机【"+in.SystemName+"】双面能力取值不合法")
+	}
+
+	return in, nil
 }
 
 // validate 归一化并校验入参：设备必须存在且属于同一门店，纸张能力必须是 A4/A3。

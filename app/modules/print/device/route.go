@@ -22,6 +22,11 @@ func Register() {
 
 		// 登记设备：首次登录创建，之后更新归属并刷新心跳
 		auth.Post("/devices/register", deviceController.Register)
+		// 登录后选门店：只返回当前账号绑定的门店
+		auth.Get("/shops", deviceController.MyShops)
+		// 打印机上报：客户端勾选本机队列并把纸张 / 彩色 / 双面能力写到服务端
+		auth.Get("/devices/{id}/printers", deviceController.Printers)
+		auth.Post("/devices/{id}/printers/sync", deviceController.SyncPrinters)
 		auth.Post("/devices/{id}/heartbeat", deviceController.Heartbeat)
 		// 拉任务会顺带刷新心跳，客户端不必额外发心跳
 		auth.Get("/devices/{id}/tasks", deviceController.Tasks)

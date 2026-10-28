@@ -34,6 +34,14 @@ type ShopListQuery struct {
 	PageSize    int
 }
 
+// MyShopOption 是客户端登录后可选的归属门店，只暴露选择门店需要的字段。
+type MyShopOption struct {
+	ID     types.ID `json:"id"`
+	Name   string   `json:"name"`
+	Role   string   `json:"role"`
+	Status int8     `json:"status"`
+}
+
 // ShopService 负责门店、门店成员与审核。
 type ShopService struct {
 	shops  *repository.PrintShopRepository
@@ -211,6 +219,35 @@ func (s *ShopService) ListStaff(ctx context.Context, shopID types.ID) ([]model.P
 // MyShops 查询当前后台账号绑定的门店，客户端登录后据此选门店。
 func (s *ShopService) MyShops(ctx context.Context, userID types.ID) ([]model.PrintShopStaffModel, error) {
 	return s.staffs.ListByUser(ctx, userID)
+}
+
+// MyShopOptions 返回账号绑定且未删除的门店，供客户端登录后选择设备归属。
+// 参数 userID 为后台账号；返回空切片表示未绑定任何门店。
+func (s *ShopService) MyShopOptions(ctx context.Context, userID types.ID) ([]MyShopOption, error) {
+	staffs, err := s.staffs.ListByUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	options := make([]MyShopOption, 0, len(staffs))
+	for _, staff := range staffs {
+		shop, err := s.shops.FindByID(ctx, staff.ShopID)
+		if err != nil {
+			return nil, err
+		}
+		if shop == nil {
+			continue
+		}
+
+		options = append(options, MyShopOption{
+			ID:     shop.ID,
+			Name:   shop.Name,
+			Role:   staff.Role,
+			Status: shop.Status,
+		})
+	}
+
+	return options, nil
 }
 
 // EnsureStaff 校验账号是否属于门店，设备登记与核销前调用。

@@ -11,6 +11,7 @@ import (
 	"eqray-eprint/app/modules/base/support"
 	"eqray-eprint/app/modules/base/types"
 	"eqray-eprint/app/modules/print/device/request"
+	"eqray-eprint/app/modules/print/model"
 	"eqray-eprint/app/modules/print/service"
 )
 
@@ -26,6 +27,66 @@ func NewDeviceController() *DeviceController {
 		devices: service.NewDeviceService(),
 		orders:  service.NewOrderService(),
 	}
+}
+
+// MyShops 返回当前登录账号绑定的门店，客户端登录后据此选择设备归属。
+// 无入参，账号取自令牌；返回门店 ID、名称、角色与营业状态。
+func (c *DeviceController) MyShops(ctx http.Context) http.Response {
+	options, err := service.NewShopService().MyShopOptions(ctx.Context(), types.ID(support.UserID(ctx.Context())))
+	if err != nil {
+		return result.Fail(ctx, err)
+	}
+
+	return result.Success(ctx, options)
+}
+
+// Printers 返回设备已上报的打印机（含停用），客户端用于回填勾选与能力配置。
+// 入参：路径 id 为设备 ID；返回该设备下的打印机列表。
+func (c *DeviceController) Printers(ctx http.Context) http.Response {
+	device, err := c.ownedDevice(ctx)
+	if err != nil {
+		return result.Fail(ctx, err)
+	}
+
+	list, err := service.NewPrinterService().ListByDevice(ctx.Context(), device.ID)
+	if err != nil {
+		return result.Fail(ctx, err)
+	}
+
+	return result.Success(ctx, list)
+}
+
+// SyncPrinters 用客户端勾选结果覆盖设备的打印机集合。
+// 入参：路径 id 为设备 ID，请求体 printers 为勾选的完整集合；返回同步后的列表。
+func (c *DeviceController) SyncPrinters(ctx http.Context) http.Response {
+	device, err := c.ownedDevice(ctx)
+	if err != nil {
+		return result.Fail(ctx, err)
+	}
+
+	var req request.SyncPrintersRequest
+	if err := param.Bind(ctx, &req); err != nil {
+		return result.Fail(ctx, err)
+	}
+
+	items := make([]service.PrinterReportItem, 0, len(req.Printers))
+	for _, item := range req.Printers {
+		items = append(items, service.PrinterReportItem{
+			SystemName:    item.SystemName,
+			Name:          item.Name,
+			Model:         item.Model,
+			PaperTypes:    item.PaperTypes,
+			ColorSupport:  item.ColorSupport,
+			DuplexSupport: item.DuplexSupport,
+		})
+	}
+
+	list, err := service.NewPrinterService().SyncDevicePrinters(ctx.Context(), device, items)
+	if err != nil {
+		return result.Fail(ctx, err)
+	}
+
+	return result.Success(ctx, list)
 }
 
 // Register 客户端登录后登记设备，已存在则更新归属并刷新心跳。
@@ -143,6 +204,26 @@ func (c *DeviceController) Pickup(ctx http.Context) http.Response {
 	}
 
 	return result.Success(ctx, order)
+}
+
+// ownedDevice 解析路径中的设备并校验当前账号属于设备门店。
+// 返回设备记录；设备不存在或账号不属于该门店时返回业务错误。
+func (c *DeviceController) ownedDevice(ctx http.Context) (*model.PrintDeviceModel, error) {
+	deviceID, err := pathDeviceID(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	device, err := c.devices.Detail(ctx.Context(), deviceID)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := service.NewShopService().EnsureStaff(ctx.Context(), types.ID(support.UserID(ctx.Context())), device.PrintShopID); err != nil {
+		return nil, err
+	}
+
+	return device, nil
 }
 
 // pathDeviceID 解析路径里的设备 ID。

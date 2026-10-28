@@ -14,6 +14,7 @@ import (
 	baseErrs "eqray-eprint/app/modules/base/errs"
 	"eqray-eprint/app/modules/base/support"
 	"eqray-eprint/app/modules/base/types"
+	infraService "eqray-eprint/app/modules/infra/service"
 	memberService "eqray-eprint/app/modules/member/service"
 	payEnums "eqray-eprint/app/modules/pay/enums"
 	payService "eqray-eprint/app/modules/pay/service"
@@ -69,6 +70,7 @@ type TaskView struct {
 	TaskNo        string         `json:"taskNo"`
 	OrderNo       string         `json:"orderNo"`
 	FileID        types.ID       `json:"fileId"`
+	FileURL       string         `json:"fileUrl"`
 	FileName      string         `json:"fileName"`
 	FilePageCount int            `json:"filePageCount"`
 	PaperType     string         `json:"paperType"`
@@ -108,6 +110,7 @@ type OrderService struct {
 	orders     *repository.PrintOrderRepository
 	items      *repository.PrintOrderItemRepository
 	files      *repository.PrintFileRepository
+	infra      *infraService.FileService
 	capability *CapabilityService
 	shops      *ShopService
 	payments   *payService.PaymentService
@@ -119,6 +122,7 @@ func NewOrderService() *OrderService {
 		orders:     repository.NewPrintOrderRepository(),
 		items:      repository.NewPrintOrderItemRepository(),
 		files:      repository.NewPrintFileRepository(),
+		infra:      infraService.NewFileService(),
 		capability: NewCapabilityService(),
 		shops:      NewShopService(),
 		payments:   payService.NewPaymentService(),
@@ -413,10 +417,18 @@ func (s *OrderService) ClaimTasks(ctx context.Context, deviceID types.ID, limit 
 		}
 		systemName = printer.SystemName
 
+		// 可打印 PDF 的地址随任务一起下发；地址可能是本地 /storage 相对路径，
+		// 客户端按自己的服务端地址补全即可
+		fileURL, err := s.taskFileURL(ctx, item.FileID)
+		if err != nil {
+			return nil, err
+		}
+
 		views = append(views, TaskView{
 			TaskNo:        item.TaskNo,
 			OrderNo:       orderNo,
 			FileID:        item.FileID,
+			FileURL:       fileURL,
 			FileName:      item.FileName,
 			FilePageCount: item.FilePageCount,
 			PaperType:     item.PaperType,
@@ -432,6 +444,28 @@ func (s *OrderService) ClaimTasks(ctx context.Context, deviceID types.ID, limit 
 	}
 
 	return views, nil
+}
+
+// taskFileURL 返回任务可打印 PDF 的下发地址。
+// 参数 fileID 为 print_file 主键；记录不存在或未生成 PDF 时返回空串，由客户端按文件异常回执。
+func (s *OrderService) taskFileURL(ctx context.Context, fileID types.ID) (string, error) {
+	record, err := s.files.FindByID(ctx, fileID)
+	if err != nil {
+		return "", err
+	}
+	if record == nil || record.PDFFileID == 0 {
+		return "", nil
+	}
+
+	infraFile, err := s.infra.FindByID(ctx, record.PDFFileID)
+	if err != nil {
+		return "", err
+	}
+	if infraFile == nil {
+		return "", nil
+	}
+
+	return infraFile.Url, nil
 }
 
 // ReportTask 处理客户端回执：打印中 / 完成 / 失败。
