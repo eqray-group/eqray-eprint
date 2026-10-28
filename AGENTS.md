@@ -395,6 +395,20 @@ func normalizeTagInput(in *MemberTagSaveInput) error {
 - **迁移**：`Up` 写清建表 / 补列 / 种子内容与幂等前提，`Down` 写清回滚动作。
 - **前端**：TS / Vue 函数上方用 `// 中文说明`，写触发时机与副作用（如「搜索：合并条件后重新查询」）。
 
+### 4.13 公开参数与地图选点
+
+- 参数配置 `infra_config.visible=1` 才允许通过 `GET /api/v1/infra/configs/public?keys=a,b`
+  （逗号分隔，最多 20 个）读取；该路由只挂 `TokenAuth`，**不校验 `infra:config:list` 权限点**，
+  供业务页面读一个 Key（如地图）而不需要给运营开参数配置权限。
+- 前端能读的配置项必须 `visible=1`，并在后台「基础设施 → 参数配置」里维护值；
+  **不要把 Key 写进前端代码或 `exe.config`**，换 Key 不该重新打包。
+- 高德地图参数（迁移 `20261028000001_seed_infra_config_amap` 已 seed，值默认空）：
+  `print.amap.web.key`（Web 端 JS API Key）、`print.amap.web.security_code`（安全密钥，未启用留空）。
+- 前端统一用 `src/utils/amap.ts` 的 `fetchAmapCredentials()` + `loadAmap()` 加载脚本
+  （单例、失败可重试），键名常量也在该文件；不要各自插 script 标签。
+- 门店经纬度只通过高德选点维护：`views/print/shop/modules/shop-location-dialog.vue` 选点后回填
+  `longitude / latitude / address`，地址取逆地理编码结果，用户仍可手改。
+
 ---
 
 ## 5. 后端模板

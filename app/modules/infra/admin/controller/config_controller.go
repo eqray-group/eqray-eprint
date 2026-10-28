@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"strings"
+
 	"github.com/goravel/framework/contracts/http"
 
 	"eqray-eprint/app/modules/base/param"
@@ -40,6 +42,20 @@ func (c *ConfigController) Index(ctx http.Context) http.Response {
 	}
 
 	return result.Page(ctx, list, total)
+}
+
+// Public 读取对外公开的参数值：只要求登录态，不校验参数配置权限点，
+// 供门店地图选点这类「业务页面要读一个 Key」的场景使用。
+// 入参：keys（查询串，逗号分隔的参数键，最多 20 个）；返回「键 → 值」映射，未配置的键不返回。
+func (c *ConfigController) Public(ctx http.Context) http.Response {
+	keys := strings.Split(ctx.Request().Query("keys"), ",")
+
+	values, err := c.service.Public(ctx.Context(), keys)
+	if err != nil {
+		return result.Fail(ctx, err)
+	}
+
+	return result.Success(ctx, values)
 }
 
 // Store 新增参数配置；配置键唯一，重复时返回业务错误码。

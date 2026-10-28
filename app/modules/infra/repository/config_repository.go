@@ -133,6 +133,35 @@ func (r *ConfigRepository) FindByKey(ctx context.Context, key string) (*model.In
 	return &m, nil
 }
 
+// PickVisible 按参数键批量取出对外公开的参数值，返回「键 → 值」映射。
+// 只返回 visible=1 的记录：未配置、未公开或已软删的键不会出现在结果里。
+func (r *ConfigRepository) PickVisible(ctx context.Context, keys []string) (map[string]string, error) {
+	values := make(map[string]string, len(keys))
+	if len(keys) == 0 {
+		return values, nil
+	}
+
+	conditions := make([]any, 0, len(keys))
+	for _, key := range keys {
+		conditions = append(conditions, key)
+	}
+
+	list := make([]model.InfraConfigModel, 0)
+	if err := facades.DB().WithContext(ctx).Table(configTable).
+		WhereIn("config_key", conditions).
+		Where("visible", 1).
+		WhereNull("deleted_at").
+		Get(&list); err != nil {
+		return nil, err
+	}
+
+	for _, item := range list {
+		values[item.ConfigKey] = item.Value
+	}
+
+	return values, nil
+}
+
 // ExistsByKey 判断参数键是否已被占用，excludeID 用于编辑时排除自身。
 func (r *ConfigRepository) ExistsByKey(ctx context.Context, key string, excludeID types.ID) (bool, error) {
 	query := facades.DB().WithContext(ctx).Table(configTable).

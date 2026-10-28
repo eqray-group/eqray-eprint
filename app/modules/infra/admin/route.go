@@ -52,6 +52,8 @@ func Register() {
 		perm("infra:file-config:delete").Middleware(operate("文件配置", "删除配置")).
 			Delete("/file-configs/{id}", fileConfigController.Destroy)
 
+		// 公开参数：登录即可读，只返回 visible=1 的参数（门店地图 Key 等业务页面依赖）
+		auth.Get("/configs/public", configController.Public)
 		perm("infra:config:list").Get("/configs", configController.Index)
 		perm("infra:config:create").Middleware(operate("参数配置", "新增参数")).
 			Post("/configs", configController.Store)

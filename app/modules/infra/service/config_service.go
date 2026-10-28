@@ -18,6 +18,8 @@ const (
 	// configCachePrefix 是参数值缓存键前缀；值变更后按 key 精确失效（docs 6.4）。
 	configCachePrefix = "infra:config:"
 	configCacheTTL    = 10 * time.Minute
+	// publicConfigMaxKeys 限制一次公开读取的键数量，避免被当成全量导出接口。
+	publicConfigMaxKeys = 20
 )
 
 // ConfigCreateInput 是新增参数配置的入参。
@@ -139,6 +141,31 @@ func (s *ConfigService) Delete(ctx context.Context, id types.ID) error {
 	s.invalidate(m.ConfigKey)
 
 	return nil
+}
+
+// Public 读取对外公开的参数值（visible=1），供前端地图 Key 等只读场景使用。
+// 参数 keys 为参数键列表，会去空白、去重并限制数量；返回「键 → 值」映射，
+// 未配置或未公开的键直接不出现在结果里，由调用方各自兜底。
+func (s *ConfigService) Public(ctx context.Context, keys []string) (map[string]string, error) {
+	clean := make([]string, 0, len(keys))
+	seen := make(map[string]bool, len(keys))
+	for _, key := range keys {
+		key = strings.TrimSpace(key)
+		if key == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		clean = append(clean, key)
+	}
+
+	if len(clean) == 0 {
+		return map[string]string{}, nil
+	}
+	if len(clean) > publicConfigMaxKeys {
+		return nil, baseErrs.WithMsg(baseErrs.BadRequest, "一次最多读取 20 个参数")
+	}
+
+	return s.configs.PickVisible(ctx, clean)
 }
 
 // GetString 读取参数值；未配置时返回默认值。值走缓存，命中后不再查库。

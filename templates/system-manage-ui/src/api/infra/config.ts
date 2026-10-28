@@ -12,6 +12,18 @@ export function fetchGetConfigList(params: Api.Infra.ConfigSearchParams) {
 }
 
 /**
+ * 读取对外公开的参数值（仅 visible=1 的参数）
+ * 只要求登录态，不校验参数配置权限点，供门店地图选点等业务页面使用
+ * @param keys 参数键列表，最多 20 个
+ */
+export function fetchGetPublicConfigs(keys: string[]) {
+  return request.get<Record<string, string>>({
+    url: '/api/v1/infra/configs/public',
+    params: { keys: keys.join(',') }
+  })
+}
+
+/**
  * 新增参数配置
  * @param data 参数分组、名称、键、值等信息
  */

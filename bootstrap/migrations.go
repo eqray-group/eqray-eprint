@@ -44,6 +44,8 @@ func Migrations() []schema.Migration {
 		&migrations.M20261020000031CreateInfraSmsTemplateTable{},
 		&migrations.M20261020000032SeedInfraSms{},
 		&migrations.M20261020000033SeedInfraSmsMenu{},
+		// 高德地图 Key：门店经纬度选点使用，值在参数配置里填写
+		&migrations.M20261028000001SeedInfraConfigAmap{},
 
 		// ---------- member ----------
 		// 会员模块重建：只保留会员档案、会员卡、收货地址与第三方登录；
