@@ -46,55 +46,6 @@ export function fetchDeleteMember(id: string) {
   })
 }
 
-// 调整会员积分
-export function fetchAdjustMemberPoint(id: string, data: Api.Member.PointAdjustParams) {
-  return request.post<null>({
-    url: `/api/v1/member/users/${id}/point`,
-    params: data
-  })
-}
-
-// 获取会员积分记录
-export function fetchGetMemberPointRecords(
-  id: string,
-  params: { pageNo?: number; pageSize?: number }
-) {
-  return request.get<Api.Member.PointRecordList>({
-    url: `/api/v1/member/users/${id}/points`,
-    params
-  })
-}
-
-// 调整会员等级
-export function fetchAdjustMemberLevel(id: string, data: Api.Member.LevelAdjustParams) {
-  return request.put<null>({
-    url: `/api/v1/member/users/${id}/level`,
-    params: data
-  })
-}
-
-// 获取会员等级记录
-export function fetchGetMemberLevelRecords(
-  id: string,
-  params: { pageNo?: number; pageSize?: number }
-) {
-  return request.get<Api.Member.LevelRecordList>({
-    url: `/api/v1/member/users/${id}/level-records`,
-    params
-  })
-}
-
-// 获取会员签到记录
-export function fetchGetMemberSignRecords(
-  id: string,
-  params: { pageNo?: number; pageSize?: number }
-) {
-  return request.get<Api.Member.SignRecordList>({
-    url: `/api/v1/member/users/${id}/sign-records`,
-    params
-  })
-}
-
 // 获取会员收货地址
 export function fetchGetMemberAddresses(id: string) {
   return request.get<Api.Member.AddressItem[]>({

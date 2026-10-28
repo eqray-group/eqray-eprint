@@ -60,7 +60,9 @@ func Register() {
 
 		userUpdate := perm("system:user:update")
 		userUpdate.Middleware(operate("用户管理", "编辑用户")).Put("/users/{id}", userController.Update)
-		userUpdate.Middleware(operate("用户管理", "重置密码")).Put("/users/{id}/password", userController.ResetPassword)
+		// 重置密码能直接接管他人账号，权限点与编辑分离，菜单种子里是独立按钮
+		perm("system:user:reset-password").Middleware(operate("用户管理", "重置密码")).
+			Put("/users/{id}/password", userController.ResetPassword)
 
 		perm("system:user:delete").Middleware(operate("用户管理", "删除用户")).Delete("/users/{id}", userController.Destroy)
 

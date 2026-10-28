@@ -3,8 +3,6 @@ package repository
 import (
 	"context"
 
-	"github.com/goravel/framework/contracts/database/db"
-
 	"eqray-eprint/app/facades"
 	baseEnums "eqray-eprint/app/modules/base/enums"
 	baseErrs "eqray-eprint/app/modules/base/errs"
@@ -20,14 +18,13 @@ const memberTable = model.MemberUserTable
 type MemberFilter struct {
 	Nickname string
 	Mobile   string
-	LevelID  types.ID
-	GroupID  types.ID
 	Status   *baseEnums.CommonStatusEnum
 }
 
 // MemberRepository 是 member_user 表的仓储。
 type MemberRepository struct{}
 
+// NewMemberRepository 构造会员仓储。
 func NewMemberRepository() *MemberRepository {
 	return &MemberRepository{}
 }
@@ -46,15 +43,10 @@ func (r *MemberRepository) Create(ctx context.Context, m *model.MemberUserModel)
 		"sex":         m.Sex,
 		"birthday":    m.Birthday,
 		"area_id":     m.AreaID,
-		"level_id":    m.LevelID,
-		"point":       m.Point,
-		"experience":  m.Experience,
-		"tag_ids":     m.TagIDs,
 		"mark":        m.Mark,
 		"register_ip": m.RegisterIP,
 		"login_ip":    m.LoginIP,
 		"login_date":  m.LoginDate,
-		"group_id":    m.GroupID,
 		"status":      m.Status,
 		"creator":     m.Creator,
 		"created_at":  m.CreatedAt,
@@ -83,12 +75,7 @@ func (r *MemberRepository) Update(ctx context.Context, m *model.MemberUserModel)
 			"sex":        m.Sex,
 			"birthday":   m.Birthday,
 			"area_id":    m.AreaID,
-			"level_id":   m.LevelID,
-			"point":      m.Point,
-			"experience": m.Experience,
-			"tag_ids":    m.TagIDs,
 			"mark":       m.Mark,
-			"group_id":   m.GroupID,
 			"status":     m.Status,
 			"updater":    m.Updater,
 			"updated_at": m.UpdatedAt,
@@ -101,7 +88,7 @@ func (r *MemberRepository) Update(ctx context.Context, m *model.MemberUserModel)
 }
 
 // UpdateProfile 只更新会员自助可改的字段。
-// 手机号、积分、等级、分组、标签、状态属于后台或独立流程，不走这里，避免越权覆盖。
+// 手机号、标记、状态属于后台或独立流程，不走这里，避免越权覆盖。
 func (r *MemberRepository) UpdateProfile(ctx context.Context, m *model.MemberUserModel) error {
 	m.FillUpdate(ctx)
 
@@ -115,39 +102,6 @@ func (r *MemberRepository) UpdateProfile(ctx context.Context, m *model.MemberUse
 			"sex":        m.Sex,
 			"birthday":   m.Birthday,
 			"area_id":    m.AreaID,
-			"updater":    m.Updater,
-			"updated_at": m.UpdatedAt,
-		})
-
-	return err
-}
-
-// UpdatePoint 在事务内更新积分余额，与积分记录写入保持原子性。
-func (r *MemberRepository) UpdatePoint(ctx context.Context, tx db.Tx, m *model.MemberUserModel) error {
-	m.FillUpdate(ctx)
-
-	_, err := tx.Table(memberTable).
-		Where("id", m.ID).
-		WhereNull("deleted_at").
-		Update(map[string]any{
-			"point":      m.Point,
-			"updater":    m.Updater,
-			"updated_at": m.UpdatedAt,
-		})
-
-	return err
-}
-
-// UpdateLevel 在事务内更新等级与经验值，与等级记录写入保持原子性。
-func (r *MemberRepository) UpdateLevel(ctx context.Context, tx db.Tx, m *model.MemberUserModel) error {
-	m.FillUpdate(ctx)
-
-	_, err := tx.Table(memberTable).
-		Where("id", m.ID).
-		WhereNull("deleted_at").
-		Update(map[string]any{
-			"level_id":   m.LevelID,
-			"experience": m.Experience,
 			"updater":    m.Updater,
 			"updated_at": m.UpdatedAt,
 		})
@@ -270,69 +224,11 @@ func (r *MemberRepository) Paginate(ctx context.Context, filter MemberFilter, pa
 	if filter.Mobile != "" {
 		query = query.WhereLike("mobile", "%"+filter.Mobile+"%")
 	}
-	if filter.LevelID > 0 {
-		query = query.Where("level_id", filter.LevelID)
-	}
-	if filter.GroupID > 0 {
-		query = query.Where("group_id", filter.GroupID)
-	}
 	if filter.Status != nil {
 		query = query.Where("status", *filter.Status)
 	}
 
 	if err := query.OrderByDesc("id").Paginate(pageNo, pageSize, &list, &total); err != nil {
-		return nil, 0, err
-	}
-
-	return list, total, nil
-}
-
-// CreateLevelRecord 在事务内写入一条等级变更记录。
-func (r *MemberRepository) CreateLevelRecord(ctx context.Context, tx db.Tx, m *model.MemberLevelRecordModel) error {
-	m.FillCreate(ctx)
-
-	_, err := tx.Table(model.MemberLevelRecordTable).Insert(map[string]any{
-		"id":          m.ID,
-		"user_id":     m.UserID,
-		"level_id":    m.LevelID,
-		"experience":  m.Experience,
-		"title":       m.Title,
-		"description": m.Description,
-		"creator":     m.Creator,
-		"created_at":  m.CreatedAt,
-		"updater":     m.Updater,
-		"updated_at":  m.UpdatedAt,
-	})
-
-	return err
-}
-
-// LevelRecords 分页查询会员的等级变更记录。
-func (r *MemberRepository) LevelRecords(ctx context.Context, userID types.ID, pageNo, pageSize int) ([]model.MemberLevelRecordModel, int64, error) {
-	list := make([]model.MemberLevelRecordModel, 0)
-	var total int64
-
-	if err := facades.DB().WithContext(ctx).Table(model.MemberLevelRecordTable).
-		Where("user_id", userID).
-		WhereNull("deleted_at").
-		OrderByDesc("id").
-		Paginate(pageNo, pageSize, &list, &total); err != nil {
-		return nil, 0, err
-	}
-
-	return list, total, nil
-}
-
-// SignRecords 分页查询会员的签到记录。
-func (r *MemberRepository) SignRecords(ctx context.Context, userID types.ID, pageNo, pageSize int) ([]model.MemberSignRecordModel, int64, error) {
-	list := make([]model.MemberSignRecordModel, 0)
-	var total int64
-
-	if err := facades.DB().WithContext(ctx).Table(model.MemberSignRecordTable).
-		Where("user_id", userID).
-		WhereNull("deleted_at").
-		OrderByDesc("id").
-		Paginate(pageNo, pageSize, &list, &total); err != nil {
 		return nil, 0, err
 	}
 

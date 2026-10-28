@@ -1,4 +1,4 @@
-<!-- 会员新增 / 编辑弹窗（字段对齐 yudao member_user） -->
+<!-- 会员新增 / 编辑弹窗：只维护身份与资料，折扣由会员卡单独维护 -->
 <template>
   <ElDialog
     v-model="dialogVisible"
@@ -57,37 +57,6 @@
             class="w-full"
           />
         </ElFormItem>
-        <ElFormItem label="会员等级" prop="levelId">
-          <ElSelect v-model="form.levelId" placeholder="请选择等级">
-            <ElOption
-              v-for="item in levelOptions"
-              :key="item.id"
-              :label="`Lv.${item.level} ${item.name}`"
-              :value="item.id"
-            />
-          </ElSelect>
-        </ElFormItem>
-        <ElFormItem label="积分" prop="point">
-          <ElInputNumber v-model="form.point" :min="0" :max="99999999" controls-position="right" />
-        </ElFormItem>
-        <ElFormItem label="经验值" prop="experience">
-          <ElInputNumber
-            v-model="form.experience"
-            :min="0"
-            :max="99999999"
-            controls-position="right"
-          />
-        </ElFormItem>
-        <ElFormItem label="会员分组" prop="groupId">
-          <ElSelect v-model="form.groupId" clearable placeholder="请选择分组">
-            <ElOption
-              v-for="item in groupOptions"
-              :key="item.id"
-              :label="item.name"
-              :value="item.id"
-            />
-          </ElSelect>
-        </ElFormItem>
         <ElFormItem label="状态" prop="status">
           <ElSwitch
             v-model="form.status"
@@ -98,12 +67,6 @@
           />
         </ElFormItem>
       </div>
-
-      <ElFormItem label="会员标签" prop="tagIds">
-        <ElSelect v-model="form.tagIds" multiple clearable placeholder="请选择标签" class="w-full">
-          <ElOption v-for="item in tagOptions" :key="item.id" :label="item.name" :value="item.id" />
-        </ElSelect>
-      </ElFormItem>
 
       <ElFormItem label="用户标记" prop="mark">
         <ElInput v-model="form.mark" placeholder="如：高价值客户" maxlength="255" />
@@ -123,47 +86,33 @@
   import defaultAvatar from '@imgs/user/avatar.webp'
   import { fetchUploadFile } from '@/api/infra/file'
   import { fetchCreateMember, fetchUpdateMember } from '@/api/member/user'
-  import { fetchGetLevelOptions } from '@/api/member/level'
-  import { fetchGetTagOptions } from '@/api/member/tag'
-  import { fetchGetGroupOptions } from '@/api/member/group'
 
   defineOptions({ name: 'MemberDialog' })
 
-  type MemberItem = Api.Member.MemberItem
-  type DialogType = 'add' | 'edit'
-
   interface Props {
     visible: boolean
-    type: DialogType
-    memberData?: MemberItem | null
+    type: 'add' | 'edit'
+    memberData?: Api.Member.MemberItem | null
   }
-
-  const props = withDefaults(defineProps<Props>(), {
-    memberData: null
-  })
-
-  const emit = defineEmits<{
+  interface Emits {
     (e: 'update:visible', value: boolean): void
     (e: 'success'): void
-  }>()
+  }
 
-  const dialogVisible = computed({
-    get: () => props.visible,
-    set: (value: boolean) => emit('update:visible', value)
-  })
+  const props = withDefaults(defineProps<Props>(), { memberData: null })
+  const emit = defineEmits<Emits>()
 
   const isEdit = computed(() => props.type === 'edit')
+  const dialogVisible = computed({
+    get: () => props.visible,
+    set: (value) => emit('update:visible', value)
+  })
 
   const formRef = ref<FormInstance>()
   const submitting = ref(false)
   const avatarUploading = ref(false)
 
-  // 下拉数据
-  const levelOptions = ref<Api.Member.LevelItem[]>([])
-  const tagOptions = ref<Api.Member.TagItem[]>([])
-  const groupOptions = ref<Api.Member.GroupItem[]>([])
-  const optionsLoaded = ref(false)
-
+  // 表单只保留会员档案字段：等级、积分、标签、分组已随体系下线
   const form = reactive({
     nickname: '',
     mobile: '',
@@ -171,12 +120,7 @@
     name: '',
     sex: 0,
     birthday: '',
-    levelId: '',
-    point: 0,
-    experience: 0,
-    tagIds: [] as string[],
     mark: '',
-    groupId: '',
     status: 1
   })
 
@@ -191,41 +135,9 @@
       { required: true, message: '请输入手机号', trigger: 'blur' },
       { max: 20, message: '手机号不能超过 20 个字符', trigger: 'blur' }
     ],
-    levelId: [{ required: true, message: '请选择会员等级', trigger: 'change' }],
     name: [{ max: 30, message: '真实姓名不能超过 30 个字符', trigger: 'blur' }],
     mark: [{ max: 255, message: '用户标记不能超过 255 个字符', trigger: 'blur' }]
   }
-
-  const loadOptions = async (): Promise<void> => {
-    try {
-      const [levels, tags, groups] = await Promise.all([
-        fetchGetLevelOptions(),
-        fetchGetTagOptions(),
-        fetchGetGroupOptions()
-      ])
-      levelOptions.value = levels
-      tagOptions.value = tags
-      groupOptions.value = groups
-      optionsLoaded.value = true
-
-      // 新增时默认选中最低等级，避免等级必填报错
-      if (!isEdit.value && !form.levelId && levels.length) {
-        form.levelId = levels[0].id
-      }
-    } catch {
-      // 错误提示已由请求层统一弹出
-    }
-  }
-
-  watch(
-    () => props.visible,
-    (visible) => {
-      if (!visible) return
-      if (!optionsLoaded.value) {
-        loadOptions()
-      }
-    }
-  )
 
   // 每次打开弹窗时按当前数据重置表单
   watch(
@@ -241,12 +153,7 @@
         name: data?.name ?? '',
         sex: data?.sex ?? 0,
         birthday: data?.birthday ? data.birthday.slice(0, 10) : '',
-        levelId: data?.levelId ?? '',
-        point: data?.point ?? 0,
-        experience: data?.experience ?? 0,
-        tagIds: data?.tagIds ? data.tagIds.split(',').filter(Boolean) : [],
         mark: data?.mark ?? '',
-        groupId: data?.groupId ?? '',
         status: data?.status ?? 1
       })
 
@@ -295,12 +202,7 @@
       name: form.name.trim(),
       sex: form.sex,
       birthday: form.birthday ? `${form.birthday} 00:00:00` : '',
-      levelId: form.levelId,
-      point: form.point,
-      experience: form.experience,
-      tagIds: form.tagIds.join(','),
       mark: form.mark.trim(),
-      groupId: form.groupId || undefined,
       status: form.status
     }
 

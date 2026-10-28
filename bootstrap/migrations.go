@@ -46,24 +46,39 @@ func Migrations() []schema.Migration {
 		&migrations.M20261020000033SeedInfraSmsMenu{},
 
 		// ---------- member ----------
-		&migrations.M20261020000014CreateMemberUserTable{},
-		&migrations.M20261020000015SeedMemberMenu{},
-		&migrations.M20261020000016CreateMemberLevelTable{},
-		&migrations.M20261020000017SeedMemberLevels{},
-		&migrations.M20261020000018CreateMemberPointRecordTable{},
-		&migrations.M20261020000019SeedMemberOpsMenu{},
-		&migrations.M20261020000020CreateMemberLevelRecordTable{},
-		&migrations.M20261020000021CreateMemberSignRecordTable{},
-		&migrations.M20261020000022SeedMemberTagGroupMenu{},
-		&migrations.M20261020000023CreateMemberTagTable{},
-		&migrations.M20261020000024CreateMemberGroupTable{},
-		&migrations.M20261020000025CreateMemberSocialClientTable{},
-		&migrations.M20261020000026SeedMemberSocialClientMenu{},
-		&migrations.M20261020000027CreateMemberAddressTable{},
-		&migrations.M20261020000028CreateMemberSocialUserTable{},
-		&migrations.M20261020000029CreateMemberSocialBindingTable{},
-		&migrations.M20261020000034CreateMemberSignInConfigTable{},
-		&migrations.M20261020000036SeedMemberSignInConfig{},
-		&migrations.M20261020000037SeedMemberSignConfigMenu{},
+		// 会员模块重建：只保留会员档案、会员卡、收货地址与第三方登录；
+		// 等级 / 签到 / 积分 / 分组 / 标签 / 经验值体系已全部下线
+		&migrations.M20261027000001CreateMemberUserTable{},
+		&migrations.M20261027000004CreateMemberCardTable{},
+		&migrations.M20261027000005CreateMemberAddressTable{},
+		&migrations.M20261027000006CreateMemberSocialClientTable{},
+		&migrations.M20261027000007CreateMemberSocialUserTable{},
+		&migrations.M20261027000008CreateMemberSocialBindingTable{},
+		&migrations.M20261027000009SeedMemberMenus{},
+
+		// ---------- print ----------
+		// 到店打印：门店 → 成员 → 设备 → 打印机 → 价格 → 文件 → 订单 → 明细 → 轮播
+		// 表结构见 docs/p.sql；菜单种子等前端页面就绪后再补
+		&migrations.M20261027000011CreatePrintShopTable{},
+		&migrations.M20261027000012CreatePrintShopStaffTable{},
+		&migrations.M20261027000013CreatePrintDeviceTable{},
+		&migrations.M20261027000014CreatePrintPrinterTable{},
+		&migrations.M20261027000015CreatePrintPriceConfigTable{},
+		&migrations.M20261027000016CreatePrintFileTable{},
+		&migrations.M20261027000017CreatePrintOrderTable{},
+		&migrations.M20261027000018CreatePrintOrderItemTable{},
+		&migrations.M20261027000019CreatePrintBannerTable{},
+
+		// ---------- pay ----------
+		// 支付渠道配置 → 会员钱包 → 流水 → 支付单 → 退款单 → 回调日志
+		&migrations.M20261027000020CreatePayChannelConfigTable{},
+		&migrations.M20261027000021CreatePayWalletTable{},
+		&migrations.M20261027000022CreatePayWalletTransactionTable{},
+		&migrations.M20261027000023CreatePayPaymentTable{},
+		&migrations.M20261027000024CreatePayRefundTable{},
+		&migrations.M20261027000025CreatePayNotifyLogTable{},
+		&migrations.M20261027000026SeedPayMenus{},
+		&migrations.M20261027000027SeedPrintMenus{},
+		&migrations.M20261027000028SeedMissingPerms{},
 	}
 }

@@ -99,9 +99,16 @@ func Validate(ctx http.Context, req Validatable) error {
 
 // PathID 解析路径参数 id，非法时返回 400 业务异常。
 func PathID(ctx http.Context) (types.ID, error) {
-	v, err := strconv.ParseInt(ctx.Request().Route("id"), 10, 64)
+	return PathValue(ctx, "id")
+}
+
+// PathValue 解析指定名称的路径参数为 ID。
+// 路径变量不叫 id 时（如 /wallets/{memberId}）用它，避免把参数名写死在调用处。
+func PathValue(ctx http.Context, name string) (types.ID, error) {
+	v, err := strconv.ParseInt(ctx.Request().Route(name), 10, 64)
 	if err != nil || v <= 0 {
-		return 0, errs.WithMsg(errs.BadRequest, "路径参数 id 不合法")
+		return 0, errs.WithMsg(errs.BadRequest, "路径参数 "+name+" 不合法")
 	}
+
 	return types.ID(v), nil
 }

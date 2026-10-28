@@ -4,16 +4,13 @@ package service
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
-	"time"
 
 	"github.com/goravel/framework/contracts/filesystem"
 	"github.com/goravel/s3"
 
 	"eqray-eprint/app/facades"
 	baseErrs "eqray-eprint/app/modules/base/errs"
-	"eqray-eprint/app/modules/base/support"
 	"eqray-eprint/app/modules/base/types"
 	infraErrs "eqray-eprint/app/modules/infra/errs"
 	"eqray-eprint/app/modules/infra/model"
@@ -60,79 +57,9 @@ func NewFileService() *FileService {
 	}
 }
 
-// Upload 校验扩展名与大小后落盘并写入文件表。
-// 落库失败时会删掉已写入的物理文件，避免产生孤儿文件。
+// Upload 上传后台通用图片：走默认图片白名单与参数配置里的体积上限。
 func (s *FileService) Upload(ctx context.Context, file filesystem.File) (*model.InfraFileModel, error) {
-	if file == nil {
-		return nil, baseErrs.WithMsg(baseErrs.BadRequest, "请选择要上传的文件")
-	}
-
-	ext := strings.ToLower(strings.TrimPrefix(file.GetClientOriginalExtension(), "."))
-	if !allowedExtensions[ext] {
-		return nil, baseErrs.New(infraErrs.InfraFileTypeNotAllowed)
-	}
-
-	size, err := file.Size()
-	if err != nil {
-		return nil, baseErrs.New(infraErrs.InfraFileUploadFailed)
-	}
-	if size <= 0 {
-		return nil, baseErrs.WithMsg(baseErrs.BadRequest, "文件内容为空")
-	}
-	maxMB := s.configs.GetInt(ctx, uploadMaxSizeKey, defaultMaxFileSizeMB)
-	if maxMB <= 0 {
-		maxMB = defaultMaxFileSizeMB
-	}
-	if size > int64(maxMB)<<20 {
-		return nil, baseErrs.New(infraErrs.InfraFileTooLarge, maxMB)
-	}
-
-	// 存储位置由主文件配置决定，未配置时回落到本地 uploads 目录
-	target, err := s.fileConfigs.Active(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	driver, err := storageDriver(ctx, target)
-	if err != nil {
-		return nil, err
-	}
-
-	// 按「年/月/日」分目录，并用雪花 ID 加原扩展名重命名，避免同名覆盖
-	dir := strings.Trim(target.Dir, "/")
-	if dir == "" {
-		dir = uploadDir
-	}
-	dir = dir + "/" + time.Now().Format("2006/01/02")
-
-	name := fmt.Sprintf("%d.%s", support.NewID(), ext)
-	path, err := driver.PutFileAs(dir, file, name)
-	if err != nil {
-		return nil, baseErrs.New(infraErrs.InfraFileUploadFailed)
-	}
-
-	// 本地磁盘用相对路径，前端开发代理与生产反向代理都能直接复用；对象存储用其公网访问前缀
-	url := "/storage/" + path
-	if target.Storage == fileConfigS3Storage {
-		url = driver.Url(path)
-	}
-
-	mimeType, _ := file.MimeType()
-
-	m := &model.InfraFileModel{
-		ConfigID: target.ConfigID,
-		Name:     file.GetClientOriginalName(),
-		Path:     path,
-		Url:      url,
-		Type:     mimeType,
-		Size:     size,
-	}
-	if err := s.files.Create(ctx, m); err != nil {
-		_ = driver.Delete(path)
-		return nil, err
-	}
-
-	return m, nil
+	return s.UploadAs(ctx, file, allowedExtensions, 0)
 }
 
 // storageDriver 按存储目标返回磁盘驱动；S3 类型在运行时按数据库里的配置构建驱动。

@@ -39,6 +39,19 @@
       </ElCol>
     </ElRow>
 
+    <ElRow v-if="hasAuth('print:order:list')" :gutter="20">
+      <ElCol v-for="card in printCards" :key="card.label" :xs="24" :sm="12" :lg="6">
+        <div class="art-card relative mb-5 flex h-35 flex-col justify-center px-5 max-sm:mb-4">
+          <span class="text-sm text-g-700">{{ card.label }}</span>
+          <ArtCountTo class="mt-2 text-[26px] font-medium" :target="card.value" :duration="1000" />
+          <span class="mt-1 text-xs text-g-600">{{ card.tip }}</span>
+          <div class="absolute top-0 right-5 bottom-0 m-auto flex-cc size-12.5 rounded-xl bg-theme/10">
+            <ArtSvgIcon :icon="card.icon" class="text-xl text-theme" />
+          </div>
+        </div>
+      </ElCol>
+    </ElRow>
+
     <ElRow :gutter="20">
       <ElCol :xs="24" :lg="16">
         <div class="art-card mb-5 p-5 max-sm:mb-4">
@@ -171,6 +184,7 @@
   import { useUserStore } from '@/store/modules/user'
   import { useAuth } from '@/hooks/core/useAuth'
   import { fetchGetDashboardOverview } from '@/api/system/dashboard'
+  import { fetchGetPrintStatistics } from '@/api/print/file'
 
   defineOptions({ name: 'DashboardConsole' })
 
@@ -260,6 +274,44 @@
     ]
   })
 
+  // 打印业务概览：接口失败时保持 0，不影响控制台其它区块
+  const printStats = ref<Api.Print.StatisticsOverview>({
+    todayOrders: 0,
+    todayPaidOrders: 0,
+    todayPaidAmount: 0,
+    pendingPickup: 0,
+    printingOrders: 0,
+    failedTasks: 0,
+    onlineDevices: 0
+  })
+
+  const printCards = computed(() => [
+    {
+      label: '今日打印订单',
+      value: printStats.value.todayOrders,
+      tip: `已支付 ${printStats.value.todayPaidOrders} 笔`,
+      icon: 'ri:printer-line'
+    },
+    {
+      label: '今日打印收入',
+      value: Number((printStats.value.todayPaidAmount / 100).toFixed(2)),
+      tip: '单位：元',
+      icon: 'ri:money-cny-circle-line'
+    },
+    {
+      label: '待取件',
+      value: printStats.value.pendingPickup,
+      tip: `打印中 ${printStats.value.printingOrders} 单`,
+      icon: 'ri:inbox-archive-line'
+    },
+    {
+      label: '在线设备',
+      value: printStats.value.onlineDevices,
+      tip: printStats.value.failedTasks > 0 ? `失败任务 ${printStats.value.failedTasks} 个` : '任务运行正常',
+      icon: 'ri:computer-line'
+    }
+  ])
+
   const trendLabels = computed(() => overview.value.loginTrend.map((item) => item.date))
 
   const trendData = computed(() => [
@@ -324,6 +376,17 @@
     router.push(path)
   }
 
+  // 打印概览单独加载：没有 print:order:list 权限时接口会 403，不能影响系统概览
+  const loadPrintStatistics = async (): Promise<void> => {
+    if (!hasAuth('print:order:list')) return
+
+    try {
+      printStats.value = await fetchGetPrintStatistics()
+    } catch {
+      // 打印模块可能尚未初始化数据，保持 0 即可
+    }
+  }
+
   const loadData = async (): Promise<void> => {
     loading.value = true
     try {
@@ -333,6 +396,8 @@
     } finally {
       loading.value = false
     }
+
+    void loadPrintStatistics()
   }
 
   onMounted(() => {

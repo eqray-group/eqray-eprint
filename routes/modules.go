@@ -3,6 +3,8 @@ package routes
 import (
 	"eqray-eprint/app/modules/infra"
 	"eqray-eprint/app/modules/member"
+	"eqray-eprint/app/modules/pay"
+	"eqray-eprint/app/modules/print"
 	"eqray-eprint/app/modules/system"
 )
 
@@ -11,4 +13,6 @@ func Modules() {
 	system.Register()
 	infra.Register()
 	member.Register()
+	pay.Register()
+	print.Register()
 }

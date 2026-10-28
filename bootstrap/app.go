@@ -10,6 +10,8 @@ import (
 	baseMiddleware "eqray-eprint/app/modules/base/middleware"
 	"eqray-eprint/app/modules/base/types"
 	infraMiddleware "eqray-eprint/app/modules/infra/middleware"
+	payService "eqray-eprint/app/modules/pay/service"
+	printService "eqray-eprint/app/modules/print/service"
 	systemService "eqray-eprint/app/modules/system/service"
 	"eqray-eprint/config"
 	"eqray-eprint/routes"
@@ -45,6 +47,15 @@ func Boot() contractsFoundation.Application {
 					})
 				},
 			)
+
+			// 支付成功回调：pay 不感知业务，由 bootstrap 注入打印订单的派发实现
+			payService.SetPaidHook(func(ctx context.Context, bizType string, bizID types.ID) error {
+				return printService.NewOrderService().OnPaid(ctx, bizType, bizID)
+			})
+			// 退款成功回调：同一份注入思路，打印订单据此落「已退款」
+			payService.SetRefundedHook(func(ctx context.Context, bizType string, bizID types.ID) error {
+				return printService.NewOrderService().OnRefunded(ctx, bizType, bizID)
+			})
 
 			routes.Web()
 			routes.Grpc()

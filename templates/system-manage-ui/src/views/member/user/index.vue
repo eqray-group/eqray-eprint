@@ -46,19 +46,8 @@
   import { useTable } from '@/hooks/core/useTable'
   import { useAuth } from '@/hooks/core/useAuth'
   import { fetchDeleteMember, fetchGetMemberList, fetchUpdateMemberStatus } from '@/api/member/user'
-  import { fetchGetLevelOptions } from '@/api/member/level'
-  import { fetchGetTagOptions } from '@/api/member/tag'
-  import { fetchGetGroupOptions } from '@/api/member/group'
   import defaultAvatar from '@imgs/user/avatar.webp'
-  import {
-    ElAvatar,
-    ElButton,
-    ElMessage,
-    ElMessageBox,
-    ElSpace,
-    ElSwitch,
-    ElTag
-  } from 'element-plus'
+  import { ElAvatar, ElButton, ElMessage, ElMessageBox, ElSpace, ElSwitch } from 'element-plus'
   import MemberSearch from './modules/member-search.vue'
   import MemberDialog from './modules/member-dialog.vue'
   import MemberDetail from './modules/member-detail.vue'
@@ -72,29 +61,6 @@
 
   // 性别展示配置，取值与 member_user 表一致
   const SEX_TEXT: Record<number, string> = { 0: '未知', 1: '男', 2: '女' }
-
-  // 等级 / 标签 / 分组映射，列表只返回 ID，这里换成名称展示
-  const levelMap = ref<Record<string, string>>({})
-  const tagMap = ref<Record<string, string>>({})
-  const groupMap = ref<Record<string, string>>({})
-
-  const loadOptions = async (): Promise<void> => {
-    try {
-      const [levels, tags, groups] = await Promise.all([
-        fetchGetLevelOptions(),
-        fetchGetTagOptions(),
-        fetchGetGroupOptions()
-      ])
-
-      levelMap.value = Object.fromEntries(levels.map((item) => [item.id, item.name]))
-      tagMap.value = Object.fromEntries(tags.map((item) => [item.id, item.name]))
-      groupMap.value = Object.fromEntries(groups.map((item) => [item.id, item.name]))
-    } catch {
-      // 错误提示已由请求层统一弹出
-    }
-  }
-
-  onMounted(loadOptions)
 
   // 搜索表单（key 与后端查询参数一致）
   const searchForm = ref<Api.Member.MemberSearchParams>({
@@ -111,15 +77,6 @@
   // 详情抽屉
   const detailVisible = ref(false)
   const detailId = ref('')
-
-  const tagNames = (row: MemberItem): string => {
-    if (!row.tagIds) return '-'
-    return row.tagIds
-      .split(',')
-      .map((id) => tagMap.value[id])
-      .filter(Boolean)
-      .join('、')
-  }
 
   const {
     columns,
@@ -180,34 +137,6 @@
           label: '性别',
           width: 70,
           formatter: (row: MemberItem) => SEX_TEXT[row.sex] ?? '未知'
-        },
-        {
-          prop: 'levelId',
-          label: '等级',
-          width: 110,
-          formatter: (row: MemberItem) =>
-            levelMap.value[row.levelId]
-              ? h(ElTag, { type: 'warning', effect: 'plain' }, () => levelMap.value[row.levelId])
-              : '-'
-        },
-        {
-          prop: 'point',
-          label: '积分',
-          width: 90,
-          formatter: (row: MemberItem) => row.point ?? 0
-        },
-        {
-          prop: 'tagIds',
-          label: '标签',
-          minWidth: 140,
-          showOverflowTooltip: true,
-          formatter: (row: MemberItem) => tagNames(row)
-        },
-        {
-          prop: 'groupId',
-          label: '分组',
-          width: 110,
-          formatter: (row: MemberItem) => groupMap.value[row.groupId] || '-'
         },
         {
           prop: 'status',

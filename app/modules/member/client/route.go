@@ -14,12 +14,12 @@ import (
 const Prefix = "/api/v1/client/member"
 
 // Register 注册 C 端接口，由 member.Register() 统一调用。
+// 无参数无返回；签到、积分、等级相关接口已随体系下线移除。
 func Register() {
 	authController := controller.NewMemberAuthController()
 	profileController := controller.NewMemberProfileController()
 	addressController := controller.NewMemberAddressController()
-	signController := controller.NewMemberSignController()
-	recordController := controller.NewMemberRecordController()
+	cardController := controller.NewMemberCardController()
 
 	facades.Route().Prefix(Prefix).Group(func(r route.Router) {
 		// ---------- 免登录 ----------
@@ -44,22 +44,16 @@ func Register() {
 		memberAuth.Get("/profile", profileController.Show)
 		memberAuth.Put("/profile", profileController.Update)
 
+		// ---------- 我的会员卡 ----------
+		// 折扣随卡走，与会员等级无关；未发卡返回业务错误码
+		memberAuth.Get("/card", cardController.Show)
+
 		// ---------- 我的收货地址 ----------
 		memberAuth.Get("/addresses", addressController.Index)
 		memberAuth.Post("/addresses", addressController.Store)
 		memberAuth.Put("/addresses/{id}", addressController.Update)
 		memberAuth.Delete("/addresses/{id}", addressController.Destroy)
 		memberAuth.Put("/addresses/{id}/default", addressController.SetDefault)
-
-		// ---------- 每日签到 ----------
-		memberAuth.Get("/sign/status", signController.Status)
-		memberAuth.Post("/sign", signController.Sign)
-		memberAuth.Get("/sign/records", recordController.SignRecords)
-
-		// ---------- 积分 / 等级（只读） ----------
-		memberAuth.Get("/points/records", recordController.PointRecords)
-		memberAuth.Get("/level/records", recordController.LevelRecords)
-		memberAuth.Get("/levels", recordController.Levels)
 
 		// 后续 C 端业务接口统一下沉到 client/controller，会员身份一律用
 		// support.MemberID(ctx.Context()) 取，禁止信任前端传入的会员 ID。

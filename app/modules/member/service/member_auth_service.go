@@ -212,6 +212,8 @@ func (s *MemberAuthService) verifySmsCode(scene, mobile, code string) error {
 }
 
 // ensureMemberByMobile 按手机号查会员，不存在则创建（默认昵称 + 启用状态）。
+// 注册成功后顺带签发默认会员卡（无折扣），发卡失败不阻断登录，
+// 后台可以在会员卡页面补发；参数 mobile 为手机号，ip 为注册来源 IP。
 func (s *MemberAuthService) ensureMemberByMobile(ctx context.Context, mobile, ip string) (*model.MemberUserModel, error) {
 	m, err := s.members.FindByMobile(ctx, mobile)
 	if err != nil {
@@ -235,6 +237,9 @@ func (s *MemberAuthService) ensureMemberByMobile(ctx context.Context, mobile, ip
 
 		return nil, err
 	}
+
+	// 发卡失败不影响登录，后台可手动补发
+	_ = NewMemberCardService().IssueDefault(ctx, m.ID)
 
 	return m, nil
 }
