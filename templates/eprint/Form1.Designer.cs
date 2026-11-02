@@ -80,12 +80,24 @@ namespace eprint
             this.lblToolbarHint = new System.Windows.Forms.Label();
             this.panelStatus = new System.Windows.Forms.Panel();
             this.panelStatusLeft = new System.Windows.Forms.Panel();
-            this.lblStatusIcon = new System.Windows.Forms.Label();
+            this.panelStatusDot = new System.Windows.Forms.Panel();
             this.lblStatus = new System.Windows.Forms.Label();
             this.lblFooter = new System.Windows.Forms.Label();
             this.panelStatusLine = new System.Windows.Forms.Panel();
+            this.panelLogCard = new System.Windows.Forms.Panel();
+            this.panelLogHeader = new System.Windows.Forms.Panel();
+            this.lblLogTitle = new System.Windows.Forms.Label();
+            this.lblLogHint = new System.Windows.Forms.Label();
+            this.btnClearLog = new System.Windows.Forms.Button();
+            this.panelLogLine = new System.Windows.Forms.Panel();
+            this.panelLogBody = new System.Windows.Forms.Panel();
+            this.txtLog = new System.Windows.Forms.RichTextBox();
+            this.panelLogGap = new System.Windows.Forms.Panel();
             this.panelHeader.SuspendLayout();
             this.panelBody.SuspendLayout();
+            this.panelLogCard.SuspendLayout();
+            this.panelLogHeader.SuspendLayout();
+            this.panelLogBody.SuspendLayout();
             this.panelGridCard.SuspendLayout();
             this.panelGridBody.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.gridPrinters)).BeginInit();
@@ -202,6 +214,8 @@ namespace eprint
             // 
             this.panelBody.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(244)))), ((int)(((byte)(246)))), ((int)(((byte)(250)))));
             this.panelBody.Controls.Add(this.panelGridCard);
+            this.panelBody.Controls.Add(this.panelLogGap);
+            this.panelBody.Controls.Add(this.panelLogCard);
             this.panelBody.Controls.Add(this.tblStats);
             this.panelBody.Controls.Add(this.panelToolbar);
             this.panelBody.Dock = System.Windows.Forms.DockStyle.Fill;
@@ -210,6 +224,114 @@ namespace eprint
             this.panelBody.Padding = new System.Windows.Forms.Padding(20, 16, 20, 12);
             this.panelBody.Size = new System.Drawing.Size(1120, 596);
             this.panelBody.TabIndex = 1;
+            // 
+            // panelLogGap
+            // 
+            // 日志卡片与左侧表格之间的 12px 间隙，颜色与 panelBody 背景一致
+            this.panelLogGap.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(244)))), ((int)(((byte)(246)))), ((int)(((byte)(250)))));
+            this.panelLogGap.Dock = System.Windows.Forms.DockStyle.Right;
+            this.panelLogGap.Location = new System.Drawing.Point(748, 132);
+            this.panelLogGap.Name = "panelLogGap";
+            this.panelLogGap.Size = new System.Drawing.Size(12, 436);
+            this.panelLogGap.TabIndex = 4;
+            // 
+            // panelLogCard
+            // 
+            // 任务日志固定在右侧，与左侧打印机表格并排
+            this.panelLogCard.BackColor = System.Drawing.Color.White;
+            this.panelLogCard.Controls.Add(this.panelLogBody);
+            this.panelLogCard.Controls.Add(this.panelLogLine);
+            this.panelLogCard.Controls.Add(this.panelLogHeader);
+            this.panelLogCard.Dock = System.Windows.Forms.DockStyle.Right;
+            this.panelLogCard.Location = new System.Drawing.Point(760, 132);
+            this.panelLogCard.Name = "panelLogCard";
+            this.panelLogCard.Size = new System.Drawing.Size(340, 436);
+            this.panelLogCard.TabIndex = 3;
+            // 
+            // panelLogHeader
+            // 
+            this.panelLogHeader.Controls.Add(this.lblLogTitle);
+            this.panelLogHeader.Controls.Add(this.lblLogHint);
+            this.panelLogHeader.Controls.Add(this.btnClearLog);
+            this.panelLogHeader.Dock = System.Windows.Forms.DockStyle.Top;
+            this.panelLogHeader.Location = new System.Drawing.Point(0, 0);
+            this.panelLogHeader.Name = "panelLogHeader";
+            this.panelLogHeader.Size = new System.Drawing.Size(340, 44);
+            this.panelLogHeader.TabIndex = 0;
+            // 
+            // lblLogTitle
+            // 
+            this.lblLogTitle.AutoSize = true;
+            this.lblLogTitle.Font = new System.Drawing.Font("Microsoft YaHei", 10.5F, System.Drawing.FontStyle.Bold);
+            this.lblLogTitle.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(16)))), ((int)(((byte)(24)))), ((int)(((byte)(40)))));
+            this.lblLogTitle.Location = new System.Drawing.Point(16, 13);
+            this.lblLogTitle.Name = "lblLogTitle";
+            this.lblLogTitle.Size = new System.Drawing.Size(74, 19);
+            this.lblLogTitle.TabIndex = 0;
+            this.lblLogTitle.Text = "任务日志";
+            // 
+            // lblLogHint
+            // 
+            this.lblLogHint.AutoSize = true;
+            this.lblLogHint.Font = new System.Drawing.Font("Microsoft YaHei", 8.5F);
+            this.lblLogHint.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(152)))), ((int)(((byte)(162)))), ((int)(((byte)(179)))));
+            this.lblLogHint.Location = new System.Drawing.Point(98, 16);
+            this.lblLogHint.Name = "lblLogHint";
+            this.lblLogHint.Size = new System.Drawing.Size(84, 17);
+            this.lblLogHint.TabIndex = 1;
+            this.lblLogHint.Text = "最多 200 条";
+            // 
+            // btnClearLog
+            // 
+            this.btnClearLog.Cursor = System.Windows.Forms.Cursors.Hand;
+            this.btnClearLog.Dock = System.Windows.Forms.DockStyle.Right;
+            this.btnClearLog.FlatAppearance.BorderSize = 0;
+            this.btnClearLog.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnClearLog.Font = new System.Drawing.Font("Microsoft YaHei", 8.5F);
+            this.btnClearLog.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(102)))), ((int)(((byte)(112)))), ((int)(((byte)(133)))));
+            this.btnClearLog.Location = new System.Drawing.Point(268, 0);
+            this.btnClearLog.Name = "btnClearLog";
+            this.btnClearLog.Size = new System.Drawing.Size(72, 44);
+            this.btnClearLog.TabIndex = 2;
+            this.btnClearLog.Text = "清空";
+            this.btnClearLog.UseVisualStyleBackColor = false;
+            this.btnClearLog.Click += new System.EventHandler(this.btnClearLog_Click);
+            // 
+            // panelLogLine
+            // 
+            this.panelLogLine.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(234)))), ((int)(((byte)(236)))), ((int)(((byte)(240)))));
+            this.panelLogLine.Dock = System.Windows.Forms.DockStyle.Top;
+            this.panelLogLine.Location = new System.Drawing.Point(0, 44);
+            this.panelLogLine.Name = "panelLogLine";
+            this.panelLogLine.Size = new System.Drawing.Size(340, 1);
+            this.panelLogLine.TabIndex = 1;
+            // 
+            // panelLogBody
+            // 
+            this.panelLogBody.Controls.Add(this.txtLog);
+            this.panelLogBody.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.panelLogBody.Location = new System.Drawing.Point(0, 45);
+            this.panelLogBody.Name = "panelLogBody";
+            this.panelLogBody.Padding = new System.Windows.Forms.Padding(16, 6, 16, 10);
+            this.panelLogBody.Size = new System.Drawing.Size(340, 391);
+            this.panelLogBody.TabIndex = 2;
+            // 
+            // txtLog
+            // 
+            this.txtLog.BackColor = System.Drawing.Color.White;
+            this.txtLog.BorderStyle = System.Windows.Forms.BorderStyle.None;
+            this.txtLog.DetectUrls = false;
+            this.txtLog.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.txtLog.Font = new System.Drawing.Font("Microsoft YaHei", 8.5F);
+            this.txtLog.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(71)))), ((int)(((byte)(84)))), ((int)(((byte)(103)))));
+            this.txtLog.Location = new System.Drawing.Point(16, 6);
+            this.txtLog.Name = "txtLog";
+            this.txtLog.ReadOnly = true;
+            this.txtLog.ScrollBars = System.Windows.Forms.RichTextBoxScrollBars.Vertical;
+            this.txtLog.Size = new System.Drawing.Size(308, 375);
+            this.txtLog.TabIndex = 0;
+            this.txtLog.TabStop = false;
+            this.txtLog.Text = "";
             // 
             // panelGridCard
             // 
@@ -578,7 +700,7 @@ namespace eprint
             this.lblSelectedHint.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(152)))), ((int)(((byte)(162)))), ((int)(((byte)(179)))));
             this.lblSelectedHint.Location = new System.Drawing.Point(52, 43);
             this.lblSelectedHint.Name = "lblSelectedHint";
-            this.lblSelectedHint.Size = new System.Drawing.Size(110, 17);
+            this.lblSelectedHint.Size = new System.Drawing.Size(150, 17);
             this.lblSelectedHint.TabIndex = 2;
             this.lblSelectedHint.Text = "台已勾选，待上报";
             // 
@@ -726,7 +848,7 @@ namespace eprint
             // 
             // panelStatusLeft
             // 
-            this.panelStatusLeft.Controls.Add(this.lblStatusIcon);
+            this.panelStatusLeft.Controls.Add(this.panelStatusDot);
             this.panelStatusLeft.Controls.Add(this.lblStatus);
             this.panelStatusLeft.Dock = System.Windows.Forms.DockStyle.Fill;
             this.panelStatusLeft.Location = new System.Drawing.Point(0, 1);
@@ -734,16 +856,15 @@ namespace eprint
             this.panelStatusLeft.Size = new System.Drawing.Size(820, 41);
             this.panelStatusLeft.TabIndex = 0;
             // 
-            // lblStatusIcon
+            // panelStatusDot
             // 
-            this.lblStatusIcon.AutoSize = true;
-            this.lblStatusIcon.Font = new System.Drawing.Font("Microsoft YaHei", 10F);
-            this.lblStatusIcon.ForeColor = System.Drawing.Color.Silver;
-            this.lblStatusIcon.Location = new System.Drawing.Point(20, 13);
-            this.lblStatusIcon.Name = "lblStatusIcon";
-            this.lblStatusIcon.Size = new System.Drawing.Size(18, 19);
-            this.lblStatusIcon.TabIndex = 0;
-            this.lblStatusIcon.Text = "●";
+            // 10×10 的方形面板 + 自绘圆点：与右侧文字的垂直中心对齐（Top 16 + 半径 5 = 21）
+            this.panelStatusDot.BackColor = System.Drawing.Color.Silver;
+            this.panelStatusDot.Location = new System.Drawing.Point(20, 16);
+            this.panelStatusDot.Name = "panelStatusDot";
+            this.panelStatusDot.Size = new System.Drawing.Size(10, 10);
+            this.panelStatusDot.TabIndex = 0;
+            this.panelStatusDot.Paint += new System.Windows.Forms.PaintEventHandler(this.panelStatusDot_Paint);
             // 
             // lblStatus
             // 
@@ -799,6 +920,10 @@ namespace eprint
             this.panelHeader.ResumeLayout(false);
             this.panelHeader.PerformLayout();
             this.panelBody.ResumeLayout(false);
+            this.panelLogCard.ResumeLayout(false);
+            this.panelLogHeader.ResumeLayout(false);
+            this.panelLogHeader.PerformLayout();
+            this.panelLogBody.ResumeLayout(false);
             this.panelGridCard.ResumeLayout(false);
             this.panelGridBody.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)(this.gridPrinters)).EndInit();
@@ -869,8 +994,17 @@ namespace eprint
         private System.Windows.Forms.Label lblToolbarHint;
         private System.Windows.Forms.Panel panelStatus;
         private System.Windows.Forms.Panel panelStatusLeft;
-        private System.Windows.Forms.Label lblStatusIcon;
+        private System.Windows.Forms.Panel panelStatusDot;
         private System.Windows.Forms.Label lblStatus;
+        private System.Windows.Forms.Panel panelLogCard;
+        private System.Windows.Forms.Panel panelLogHeader;
+        private System.Windows.Forms.Label lblLogTitle;
+        private System.Windows.Forms.Label lblLogHint;
+        private System.Windows.Forms.Button btnClearLog;
+        private System.Windows.Forms.Panel panelLogLine;
+        private System.Windows.Forms.Panel panelLogBody;
+        private System.Windows.Forms.RichTextBox txtLog;
+        private System.Windows.Forms.Panel panelLogGap;
         private System.Windows.Forms.Label lblFooter;
         private System.Windows.Forms.Panel panelStatusLine;
     }

@@ -19,10 +19,18 @@ namespace eprint
         private readonly BindingList<PrinterRow> _rows = new BindingList<PrinterRow>();
         private readonly HashSet<string> _taskHistory = new HashSet<string>(StringComparer.Ordinal);
         private readonly Timer _taskTimer = new Timer();
+        /// <summary>任务日志最多保留的条数，超出后丢弃最早的记录。</summary>
+        private const int MaxLogLines = 200;
+
         private bool _initializing;
         private bool _polling;
         private bool _loadingPrinters;
+        /// <summary>勾选或能力改过但还没上报时为 true，用于区分「待上报 / 已上报」。</summary>
+        private bool _pendingReport;
         private string _printerLoadError;
+        /// <summary>上一条日志内容与时间，用于抑制短时间内重复的提示。</summary>
+        private string _lastLogMessage;
+        private DateTime _lastLogAt;
 
         /// <summary>
         /// 用户点击「退出登录」时为 true，Program 据此重新打开登录窗体。
@@ -73,6 +81,11 @@ namespace eprint
             await InitializeDeviceAsync();
             _taskTimer.Start();
             SetAutoState(AppSession.Device != null);
+
+            AppendLog(
+                "已登录：" + AppSession.Username + "，门店：" +
+                (AppSession.CurrentShop != null ? AppSession.CurrentShop.DisplayName : "未选择"),
+                0);
         }
 
         /// <summary>
@@ -127,6 +140,8 @@ namespace eprint
                 AppSession.CurrentShop = shop;
                 lblDevice.Text = "设备：" + device.Name + "（" + device.Code + "）";
                 SetAutoState(true);
+
+                AppendLog("设备已登记：" + device.Name + "（" + device.Code + "），门店：" + shop.DisplayName, 0);
 
                 await LoadPrintersAsync();
             }
@@ -199,6 +214,10 @@ namespace eprint
                     _rows.Add(row);
                 }
 
+                // 刚和服务端对齐过，重新加载后不存在待上报改动
+                _pendingReport = false;
+                AppendLog("已读取本机打印机 " + localPrinters.Count + " 台，与服务端同步完成", 0);
+
                 // 绑定后默认会选中第一行，清除选中避免用户误以为该行已被勾选
                 gridPrinters.ClearSelection();
                 gridPrinters.CurrentCell = null;
@@ -243,6 +262,7 @@ namespace eprint
                 row.Selected = true;
             }
 
+            _pendingReport = true;
             _rows.ResetBindings();
             gridPrinters.Refresh();
             UpdateSummary();
@@ -263,6 +283,7 @@ namespace eprint
                 row.Selected = false;
             }
 
+            _pendingReport = true;
             _rows.ResetBindings();
             gridPrinters.Refresh();
             UpdateSummary();
@@ -311,7 +332,12 @@ namespace eprint
                 }).ToList();
 
                 await AppSession.Backend.SyncPrintersAsync(AppSession.Device.Id, items);
-                SetStatus("已上报 " + items.Count + " 台打印机", false);
+
+                // 上报成功后本地与服务端一致，卡片从「待上报」切到「已上报」
+                _pendingReport = false;
+                UpdateSummary();
+
+                SetStatus("已上报 " + items.Count + " 台打印机", 1);
             }
             catch (Exception ex)
             {
@@ -373,7 +399,7 @@ namespace eprint
                         {
                             await AppSession.Backend.ReportTaskAsync(
                                 AppSession.Device.Id, task.TaskNo, 3, printedPages, string.Empty, string.Empty);
-                            SetStatus("任务 " + task.TaskNo + " 已打印完成", false);
+                            SetStatus("任务 " + task.TaskNo + " 已打印完成", 1);
                         }
                         catch (Exception ex)
                         {
@@ -533,14 +559,23 @@ namespace eprint
         }
 
         /// <summary>
-        /// 勾选状态变化时刷新顶部统计。
+        /// 勾选或能力列变化时标记「待上报」并刷新顶部统计；
+        /// 「默认」列只是展示本机默认打印机，不参与上报，忽略。
         /// </summary>
         private void gridPrinters_CellValueChanged(object sender, DataGridViewCellEventArgs e)
         {
-            if (e.RowIndex >= 0 && e.ColumnIndex == colSelected.Index)
+            if (e.RowIndex < 0 || e.ColumnIndex < 0)
             {
-                UpdateSummary();
+                return;
             }
+
+            if (e.ColumnIndex == colDefault.Index)
+            {
+                return;
+            }
+
+            _pendingReport = true;
+            UpdateSummary();
         }
 
         /// <summary>
@@ -557,6 +592,10 @@ namespace eprint
             int selected = _rows.Count(row => row.Selected);
             lblInstalledValue.Text = total.ToString();
             lblSelectedValue.Text = selected.ToString();
+            lblSelectedHint.Text = BuildSelectedHint(selected);
+            lblSelectedHint.ForeColor = selected > 0 && !_pendingReport
+                ? Color.FromArgb(16, 185, 129)
+                : Color.FromArgb(152, 162, 179);
 
             if (total == 0)
             {
@@ -580,6 +619,20 @@ namespace eprint
             {
                 HideEmptyState();
             }
+        }
+
+        /// <summary>
+        /// 生成「已勾选上报」卡片的副标题：还有改动未上报显示「待上报」，
+        /// 已和服务端一致显示「已上报」。参数 selected 为当前勾选数量。
+        /// </summary>
+        private string BuildSelectedHint(int selected)
+        {
+            if (selected == 0)
+            {
+                return _pendingReport ? "已全部取消，待上报" : "尚未勾选打印机";
+            }
+
+            return _pendingReport ? "台已勾选，待上报" : "台已勾选，已上报";
         }
 
         /// <summary>
@@ -669,22 +722,111 @@ namespace eprint
         }
 
         /// <summary>
-        /// 更新底部状态栏文案与图标颜色；message 为 null 时恢复「就绪」。
+        /// 更新底部状态栏：isError 为 true 时文字与圆点转红，同时写一条错误日志。
         /// </summary>
         private void SetStatus(string message, bool isError)
+        {
+            SetStatus(message, isError ? 2 : 0);
+        }
+
+        /// <summary>
+        /// 更新底部状态栏并按级别写任务日志（0 普通 / 1 成功 / 2 错误）；
+        /// message 为空时恢复「就绪」。
+        /// </summary>
+        private void SetStatus(string message, int logLevel)
         {
             if (string.IsNullOrEmpty(message))
             {
                 message = "就绪";
             }
 
+            bool isError = logLevel == 2;
             lblStatus.Text = message;
             lblStatus.ForeColor = isError
                 ? Color.Firebrick
                 : Color.FromArgb(71, 84, 103);
-            lblStatusIcon.ForeColor = isError
+            panelStatusDot.BackColor = isError
                 ? Color.Firebrick
                 : (message == "就绪" ? Color.Silver : Color.FromArgb(37, 99, 235));
+
+            AppendLog(message, logLevel);
+        }
+
+        /// <summary>
+        /// 追加一条任务日志：过滤「就绪」与「正在…」这类临时提示，
+        /// 相同内容一分钟内只记一次，避免轮询失败时刷屏。
+        /// 参数 message 为日志内容，level 0 普通 / 1 成功 / 2 错误。
+        /// </summary>
+        private void AppendLog(string message, int level)
+        {
+            if (txtLog == null || txtLog.IsDisposed || string.IsNullOrEmpty(message))
+            {
+                return;
+            }
+            if (message == "就绪" || message.StartsWith("正在"))
+            {
+                return;
+            }
+            if (message == _lastLogMessage && (DateTime.Now - _lastLogAt).TotalSeconds < 60)
+            {
+                return;
+            }
+
+            _lastLogMessage = message;
+            _lastLogAt = DateTime.Now;
+
+            Color color = level == 2
+                ? Color.Firebrick
+                : (level == 1 ? Color.FromArgb(16, 185, 129) : Color.FromArgb(71, 84, 103));
+
+            // 追加前判断是否停在底部：用户翻看历史日志时不强行滚到底
+            bool follow = txtLog.SelectionStart >= txtLog.TextLength - 1;
+
+            txtLog.SelectionStart = txtLog.TextLength;
+            txtLog.SelectionLength = 0;
+            txtLog.SelectionColor = color;
+            txtLog.AppendText(DateTime.Now.ToString("HH:mm:ss") + "  " + message + Environment.NewLine);
+
+            // 超出上限时从最早的行开始删：按 '\n' 定位行尾，逐行删除可以保留已有日志的着色
+            while (txtLog.Lines.Length > MaxLogLines)
+            {
+                int firstLineEnd = txtLog.Text.IndexOf('\n');
+                if (firstLineEnd < 0)
+                {
+                    break;
+                }
+
+                txtLog.Select(0, firstLineEnd + 1);
+                txtLog.SelectedText = string.Empty;
+            }
+
+            txtLog.SelectionColor = txtLog.ForeColor;
+            if (follow)
+            {
+                txtLog.SelectionStart = txtLog.TextLength;
+                txtLog.ScrollToCaret();
+            }
+        }
+
+        /// <summary>
+        /// 「清空」：只清掉界面上显示的任务日志，不影响服务端与正在打印的任务。
+        /// </summary>
+        private void btnClearLog_Click(object sender, EventArgs e)
+        {
+            txtLog.Clear();
+            _lastLogMessage = null;
+        }
+
+        /// <summary>
+        /// 把状态圆点重绘成实心圆：Panel 本身是方块，自绘才能和右侧文字对齐且边缘平滑。
+        /// </summary>
+        private void panelStatusDot_Paint(object sender, PaintEventArgs e)
+        {
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            using (var brush = new SolidBrush(panelStatusDot.BackColor))
+            {
+                e.Graphics.FillEllipse(brush, 0, 0, panelStatusDot.Width - 1, panelStatusDot.Height - 1);
+            }
         }
     }
 }
