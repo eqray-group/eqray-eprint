@@ -3,6 +3,8 @@ package request
 
 import (
 	"github.com/goravel/framework/contracts/http"
+
+	"eqray-eprint/app/modules/base/types"
 )
 
 // ShopSaveRequest 是门店新增 / 编辑入参。
@@ -72,15 +74,16 @@ func (r *ShopAuditRequest) Messages(ctx http.Context) map[string]string {
 }
 
 // StaffSaveRequest 是门店成员绑定入参。
+// UserID 用 types.ID：雪花 ID 在请求里是 19 位字符串，声明成 int64 会报「参数解析失败」。
 type StaffSaveRequest struct {
-	UserID int64  `form:"userId" json:"userId"`
-	Role   string `form:"role" json:"role"`
+	UserID types.ID `form:"userId" json:"userId"`
+	Role   string   `form:"role" json:"role"`
 }
 
-// Rules 返回校验规则。
+// Rules 返回校验规则。ID 只校验非空，具体合法性由 Controller 判断。
 func (r *StaffSaveRequest) Rules(ctx http.Context) map[string]any {
 	return map[string]any{
-		"userId": "required|integer|min:1",
+		"userId": "required",
 		"role":   "required|in:owner,staff",
 	}
 }
@@ -95,17 +98,17 @@ func (r *StaffSaveRequest) Messages(ctx http.Context) map[string]string {
 
 // DeviceSaveRequest 是设备新增 / 编辑入参。
 type DeviceSaveRequest struct {
-	Code        string `form:"code" json:"code"`
-	PrintShopID int64  `form:"printShopId" json:"printShopId"`
-	Name        string `form:"name" json:"name"`
-	Status      *int8  `form:"status" json:"status"`
-	Remark      string `form:"remark" json:"remark"`
+	Code        string   `form:"code" json:"code"`
+	PrintShopID types.ID `form:"printShopId" json:"printShopId"`
+	Name        string   `form:"name" json:"name"`
+	Status      *int8    `form:"status" json:"status"`
+	Remark      string   `form:"remark" json:"remark"`
 }
 
-// Rules 返回校验规则。
+// Rules 返回校验规则。门店 ID 只校验非空，合法性由 Controller 判断。
 func (r *DeviceSaveRequest) Rules(ctx http.Context) map[string]any {
 	return map[string]any{
-		"printShopId": "required|integer|min:1",
+		"printShopId": "required",
 		"name":        "max:64",
 		"status":      "required|integer|in:0,1",
 		"remark":      "max:255",
@@ -122,21 +125,21 @@ func (r *DeviceSaveRequest) Messages(ctx http.Context) map[string]string {
 
 // PrinterSaveRequest 是打印机新增 / 编辑入参，能力字段由后台勾选。
 type PrinterSaveRequest struct {
-	DeviceID      int64  `form:"deviceId" json:"deviceId"`
-	Name          string `form:"name" json:"name"`
-	SystemName    string `form:"systemName" json:"systemName"`
-	Model         string `form:"model" json:"model"`
-	PaperTypes    string `form:"paperTypes" json:"paperTypes"`
-	ColorSupport  int8   `form:"colorSupport" json:"colorSupport"`
-	DuplexSupport int8   `form:"duplexSupport" json:"duplexSupport"`
-	Status        *int8  `form:"status" json:"status"`
-	Remark        string `form:"remark" json:"remark"`
+	DeviceID      types.ID `form:"deviceId" json:"deviceId"`
+	Name          string   `form:"name" json:"name"`
+	SystemName    string   `form:"systemName" json:"systemName"`
+	Model         string   `form:"model" json:"model"`
+	PaperTypes    string   `form:"paperTypes" json:"paperTypes"`
+	ColorSupport  int8     `form:"colorSupport" json:"colorSupport"`
+	DuplexSupport int8     `form:"duplexSupport" json:"duplexSupport"`
+	Status        *int8    `form:"status" json:"status"`
+	Remark        string   `form:"remark" json:"remark"`
 }
 
-// Rules 返回校验规则。
+// Rules 返回校验规则。设备 ID 只校验非空，合法性由 Controller 判断。
 func (r *PrinterSaveRequest) Rules(ctx http.Context) map[string]any {
 	return map[string]any{
-		"deviceId":      "required|integer|min:1",
+		"deviceId":      "required",
 		"name":          "required|max:64",
 		"systemName":    "required|max:128",
 		"model":         "max:64",
@@ -159,18 +162,18 @@ func (r *PrinterSaveRequest) Messages(ctx http.Context) map[string]string {
 
 // PriceSaveRequest 是价格规则新增入参，价格单位为分/页。
 type PriceSaveRequest struct {
-	PrintShopID int64  `form:"printShopId" json:"printShopId"`
-	PaperType   string `form:"paperType" json:"paperType"`
-	ColorType   string `form:"colorType" json:"colorType"`
-	PrintMode   string `form:"printMode" json:"printMode"`
-	Price       int64  `form:"price" json:"price"`
-	Status      *int8  `form:"status" json:"status"`
+	PrintShopID types.ID `form:"printShopId" json:"printShopId"`
+	PaperType   string   `form:"paperType" json:"paperType"`
+	ColorType   string   `form:"colorType" json:"colorType"`
+	PrintMode   string   `form:"printMode" json:"printMode"`
+	Price       int64    `form:"price" json:"price"`
+	Status      *int8    `form:"status" json:"status"`
 }
 
-// Rules 返回校验规则。
+// Rules 返回校验规则。门店 ID 只校验非空，合法性由 Controller 判断。
 func (r *PriceSaveRequest) Rules(ctx http.Context) map[string]any {
 	return map[string]any{
-		"printShopId": "required|integer|min:1",
+		"printShopId": "required",
 		"paperType":   "required|in:A4,A3",
 		"colorType":   "required|in:bw,color",
 		"printMode":   "required|in:single,double",
@@ -189,16 +192,41 @@ func (r *PriceSaveRequest) Messages(ctx http.Context) map[string]string {
 	}
 }
 
-// PickupVerifyRequest 是取件码核销入参。
-type PickupVerifyRequest struct {
-	PrintShopID int64  `form:"printShopId" json:"printShopId"`
-	Code        string `form:"code" json:"code"`
+// PriceBatchItemRequest 是 SKU 矩阵里的单行：组合 + 单价（分/页）+ 状态。
+type PriceBatchItemRequest struct {
+	PaperType string `form:"paperType" json:"paperType"`
+	ColorType string `form:"colorType" json:"colorType"`
+	PrintMode string `form:"printMode" json:"printMode"`
+	Price     int64  `form:"price" json:"price"`
+	Status    int8   `form:"status" json:"status"`
 }
 
-// Rules 返回校验规则。
+// PriceBatchRequest 是 SKU 矩阵批量保存入参；price 为 0 表示该组合不售卖。
+type PriceBatchRequest struct {
+	PrintShopID types.ID                `form:"printShopId" json:"printShopId"`
+	Items       []PriceBatchItemRequest `form:"items" json:"items"`
+}
+
+// Rules 返回校验规则。门店必填，组合合法性由 Service 归一化校验。
+func (r *PriceBatchRequest) Rules(ctx http.Context) map[string]any {
+	return map[string]any{"printShopId": "required"}
+}
+
+// Messages 覆盖默认提示。
+func (r *PriceBatchRequest) Messages(ctx http.Context) map[string]string {
+	return map[string]string{"printShopId.required": "请选择门店"}
+}
+
+// PickupVerifyRequest 是取件码核销入参。
+type PickupVerifyRequest struct {
+	PrintShopID types.ID `form:"printShopId" json:"printShopId"`
+	Code        string   `form:"code" json:"code"`
+}
+
+// Rules 返回校验规则。门店 ID 只校验非空，合法性由 Controller 判断。
 func (r *PickupVerifyRequest) Rules(ctx http.Context) map[string]any {
 	return map[string]any{
-		"printShopId": "required|integer|min:1",
+		"printShopId": "required",
 		"code":        "required|max:16",
 	}
 }
@@ -213,25 +241,24 @@ func (r *PickupVerifyRequest) Messages(ctx http.Context) map[string]string {
 
 // BannerSaveRequest 是轮播图新增 / 编辑入参；printShopId 传 0 表示全平台。
 type BannerSaveRequest struct {
-	PrintShopID int64  `form:"printShopId" json:"printShopId"`
-	Title       string `form:"title" json:"title"`
-	ImageURL    string `form:"imageUrl" json:"imageUrl"`
-	LinkType    string `form:"linkType" json:"linkType"`
-	LinkURL     string `form:"linkUrl" json:"linkUrl"`
-	Sort        int    `form:"sort" json:"sort"`
-	Status      *int8  `form:"status" json:"status"`
+	PrintShopID types.ID `form:"printShopId" json:"printShopId"`
+	Title       string   `form:"title" json:"title"`
+	ImageURL    string   `form:"imageUrl" json:"imageUrl"`
+	LinkType    string   `form:"linkType" json:"linkType"`
+	LinkURL     string   `form:"linkUrl" json:"linkUrl"`
+	Sort        int      `form:"sort" json:"sort"`
+	Status      *int8    `form:"status" json:"status"`
 }
 
-// Rules 返回校验规则。
+// Rules 返回校验规则。printShopId 允许 0（全平台），因此不做必填校验。
 func (r *BannerSaveRequest) Rules(ctx http.Context) map[string]any {
 	return map[string]any{
-		"printShopId": "required|integer|min:0",
-		"title":       "max:64",
-		"imageUrl":    "required|max:255",
-		"linkType":    "in:none,page,url",
-		"linkUrl":     "max:255",
-		"sort":        "integer|min:0",
-		"status":      "required|integer|in:0,1",
+		"title":    "max:64",
+		"imageUrl": "required|max:255",
+		"linkType": "in:none,page,url",
+		"linkUrl":  "max:255",
+		"sort":     "integer|min:0",
+		"status":   "required|integer|in:0,1",
 	}
 }
 

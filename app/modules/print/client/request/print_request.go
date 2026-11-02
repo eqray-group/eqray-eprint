@@ -3,32 +3,34 @@ package request
 
 import (
 	"github.com/goravel/framework/contracts/http"
+
+	"eqray-eprint/app/modules/base/types"
 )
 
 // OrderItemRequest 是下单明细：一个文件 + 一套打印参数。
 type OrderItemRequest struct {
-	FileID      int64  `form:"fileId" json:"fileId"`
-	PaperType   string `form:"paperType" json:"paperType"`
-	ColorType   string `form:"colorType" json:"colorType"`
-	PrintMode   string `form:"printMode" json:"printMode"`
-	Orientation string `form:"orientation" json:"orientation"`
-	PageRange   string `form:"pageRange" json:"pageRange"`
-	Copies      int    `form:"copies" json:"copies"`
+	FileID      types.ID `form:"fileId" json:"fileId"`
+	PaperType   string   `form:"paperType" json:"paperType"`
+	ColorType   string   `form:"colorType" json:"colorType"`
+	PrintMode   string   `form:"printMode" json:"printMode"`
+	Orientation string   `form:"orientation" json:"orientation"`
+	PageRange   string   `form:"pageRange" json:"pageRange"`
+	Copies      int      `form:"copies" json:"copies"`
 }
 
 // CreateOrderRequest 是会员下单入参；金额由服务端计算，不接受前端传值。
 type CreateOrderRequest struct {
-	PrintShopID int64              `form:"printShopId" json:"printShopId"`
+	PrintShopID types.ID           `form:"printShopId" json:"printShopId"`
 	ChannelCode string             `form:"channelCode" json:"channelCode"`
 	OpenID      string             `form:"openid" json:"openid"`
 	Remark      string             `form:"remark" json:"remark"`
 	Items       []OrderItemRequest `form:"items" json:"items"`
 }
 
-// Rules 返回校验规则。
+// Rules 返回校验规则。门店 ID 只校验非空，合法性由 Controller 判断。
 func (r *CreateOrderRequest) Rules(ctx http.Context) map[string]any {
 	return map[string]any{
-		"printShopId": "required|integer|min:1",
+		"printShopId": "required",
 		"channelCode": "required|in:balance,wechat_mini,wechat_mp,wechat_h5,alipay_wap",
 		"remark":      "max:255",
 	}

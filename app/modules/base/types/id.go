@@ -34,6 +34,22 @@ func (i *ID) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// UnmarshalText 让 ID 支持表单 / 查询串绑定（encoding.TextUnmarshaler），
+// 空串视为 0；JSON 仍走 UnmarshalJSON，不受影响。
+func (i *ID) UnmarshalText(text []byte) error {
+	s := strings.TrimSpace(string(text))
+	if s == "" {
+		*i = 0
+		return nil
+	}
+	v, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return fmt.Errorf("types.ID: 无法解析 %q: %w", s, err)
+	}
+	*i = ID(v)
+	return nil
+}
+
 // Value 让 GORM 把 ID 当作 int64 写入数据库。
 func (i ID) Value() (driver.Value, error) { return int64(i), nil }
 
