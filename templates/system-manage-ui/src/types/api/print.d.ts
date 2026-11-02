@@ -42,11 +42,23 @@ declare namespace Api {
     interface StaffItem {
       id: string
       userId: string
+      /** 后台账号用户名，账号被删除时为空 */
+      username?: string
+      nickname?: string
+      mobile?: string
       shopId: string
       /** owner 店主 / staff 店员 */
       role: string
       status: number
       createdAt?: string
+    }
+
+    /** 可绑定到门店的后台账号候选 */
+    interface StaffCandidate {
+      id: string
+      username: string
+      nickname: string
+      mobile: string
     }
 
     /** 打印设备 */
@@ -149,6 +161,22 @@ declare namespace Api {
       printMode: string
       price: number
       status: number
+    }
+
+    /** SKU 矩阵里单个组合的保存项 */
+    interface PriceBatchItem {
+      paperType: string
+      colorType: string
+      printMode: string
+      /** 单价（分/页），0 表示该组合不售卖 */
+      price: number
+      status: number
+    }
+
+    /** SKU 矩阵批量保存入参 */
+    interface PriceBatchParams {
+      printShopId: string
+      items: PriceBatchItem[]
     }
 
     /** 可售组合体检提示 */

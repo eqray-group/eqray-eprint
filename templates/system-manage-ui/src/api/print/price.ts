@@ -24,6 +24,14 @@ export function fetchUpdatePrintPrice(id: string, price: number, status: number)
   })
 }
 
+// 批量保存 SKU 矩阵：单价 0 表示该组合不售卖
+export function fetchSavePrintPriceBatch(data: Api.Print.PriceBatchParams) {
+  return request.post<null>({
+    url: '/api/v1/print/price-configs/batch',
+    data
+  })
+}
+
 // 删除价格规则
 export function fetchDeletePrintPrice(id: string) {
   return request.del<null>({

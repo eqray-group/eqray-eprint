@@ -3,6 +3,9 @@ package service
 import (
 	"context"
 
+	"github.com/goravel/framework/contracts/database/db"
+
+	"eqray-eprint/app/facades"
 	baseErrs "eqray-eprint/app/modules/base/errs"
 	"eqray-eprint/app/modules/base/support"
 	"eqray-eprint/app/modules/base/types"
@@ -20,6 +23,16 @@ type PriceInput struct {
 	PrintMode   string
 	Price       int64
 	Status      int8
+}
+
+// PriceBatchItem 是 SKU 矩阵里单个组合的保存项，价格单位为分/页。
+// Price 为 0 表示该组合不售卖，已配置的规则会被删除。
+type PriceBatchItem struct {
+	PaperType string
+	ColorType string
+	PrintMode string
+	Price     int64
+	Status    int8
 }
 
 // PriceListQuery 是价格列表查询条件。
@@ -108,6 +121,90 @@ func (s *PriceService) Update(ctx context.Context, id types.ID, price int64, sta
 	rule.Status = status
 
 	return s.prices.Update(ctx, rule)
+}
+
+// SaveBatch 批量保存门店价格（SKU 矩阵页一次提交）：price > 0 的组合有则改价、无则新增，
+// price = 0 视为该组合不售卖并删除已有规则；整批在一个事务里完成，避免只保存一半。
+// 参数 shopID 为门店，items 为矩阵行；同一组合重复提交时以最后一条为准。
+func (s *PriceService) SaveBatch(ctx context.Context, shopID types.ID, items []PriceBatchItem) error {
+	if _, err := s.shops.Detail(ctx, shopID); err != nil {
+		return err
+	}
+
+	// 组合做归一化并按「纸张|色彩|单双面」去重，避免同一次提交里重复写同一条
+	unique := make(map[string]PriceBatchItem, len(items))
+	order := make([]string, 0, len(items))
+	for _, item := range items {
+		item.PaperType = normalizePaper(item.PaperType)
+		item.ColorType = normalizeColor(item.ColorType)
+		item.PrintMode = normalizeMode(item.PrintMode)
+		if item.PaperType == "" || item.ColorType == "" || item.PrintMode == "" {
+			return baseErrs.WithMsg(baseErrs.BadRequest, "纸张、色彩、单双面取值不合法")
+		}
+		if item.Price < 0 {
+			return baseErrs.New(printErrs.PriceInvalid)
+		}
+		if item.Status != printEnums.StatusEnabled && item.Status != printEnums.StatusDisabled {
+			item.Status = printEnums.StatusEnabled
+		}
+
+		key := item.PaperType + "|" + item.ColorType + "|" + item.PrintMode
+		if _, ok := unique[key]; !ok {
+			order = append(order, key)
+		}
+		unique[key] = item
+	}
+
+	if len(order) == 0 {
+		return nil
+	}
+
+	return facades.DB().WithContext(ctx).Transaction(func(tx db.Tx) error {
+		for _, key := range order {
+			item := unique[key]
+
+			existing, err := s.prices.FindByRule(ctx, shopID, item.PaperType, item.ColorType, item.PrintMode)
+			if err != nil {
+				return err
+			}
+
+			// 价格清空表示这个组合不卖，已配置就删掉
+			if item.Price == 0 {
+				if existing == nil {
+					continue
+				}
+				if err := s.prices.DeleteInTx(ctx, tx, existing.ID); err != nil {
+					return err
+				}
+				continue
+			}
+
+			if existing == nil {
+				rule := &model.PrintPriceConfigModel{
+					PrintShopID: shopID,
+					PaperType:   item.PaperType,
+					ColorType:   item.ColorType,
+					PrintMode:   item.PrintMode,
+					Price:       item.Price,
+					Status:      item.Status,
+				}
+				rule.ID = support.NewID()
+
+				if err := s.prices.CreateInTx(ctx, tx, rule); err != nil {
+					return err
+				}
+				continue
+			}
+
+			existing.Price = item.Price
+			existing.Status = item.Status
+			if err := s.prices.UpdateInTx(ctx, tx, existing); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
 }
 
 // Delete 物理删除价格规则。

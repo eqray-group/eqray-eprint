@@ -73,6 +73,32 @@ func (c *PriceController) Store(ctx http.Context) http.Response {
 	return result.Success(ctx, map[string]any{"id": id})
 }
 
+// SaveBatch 批量保存门店价格（SKU 矩阵一次提交）：单价 0 表示该组合不售卖。
+// 入参：printShopId + items（纸张、色彩、单双面、单价、状态）；返回 null。
+func (c *PriceController) SaveBatch(ctx http.Context) http.Response {
+	var req request.PriceBatchRequest
+	if err := param.Bind(ctx, &req); err != nil {
+		return result.Fail(ctx, err)
+	}
+
+	items := make([]service.PriceBatchItem, 0, len(req.Items))
+	for _, item := range req.Items {
+		items = append(items, service.PriceBatchItem{
+			PaperType: item.PaperType,
+			ColorType: item.ColorType,
+			PrintMode: item.PrintMode,
+			Price:     item.Price,
+			Status:    item.Status,
+		})
+	}
+
+	if err := c.service.SaveBatch(ctx.Context(), req.PrintShopID, items); err != nil {
+		return result.Fail(ctx, err)
+	}
+
+	return result.Success(ctx, nil)
+}
+
 // Update 修改价格与启用状态（组合本身不可改）。
 func (c *PriceController) Update(ctx http.Context) http.Response {
 	id, err := param.PathID(ctx)

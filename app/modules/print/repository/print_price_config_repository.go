@@ -3,6 +3,8 @@ package repository
 import (
 	"context"
 
+	"github.com/goravel/framework/contracts/database/db"
+
 	"eqray-eprint/app/facades"
 	baseErrs "eqray-eprint/app/modules/base/errs"
 	"eqray-eprint/app/modules/base/types"
@@ -68,6 +70,50 @@ func (r *PrintPriceConfigRepository) Delete(ctx context.Context, id types.ID) er
 	}
 
 	return nil
+}
+
+// CreateInTx 在事务内新增价格规则，与批量保存的其它组合同生共死。
+func (r *PrintPriceConfigRepository) CreateInTx(ctx context.Context, tx db.Tx, m *model.PrintPriceConfigModel) error {
+	m.FillCreate(ctx)
+
+	_, err := tx.Table(priceTable).Insert(map[string]any{
+		"id":            m.ID,
+		"print_shop_id": m.PrintShopID,
+		"paper_type":    m.PaperType,
+		"color_type":    m.ColorType,
+		"print_mode":    m.PrintMode,
+		"price":         m.Price,
+		"status":        m.Status,
+		"creator":       m.Creator,
+		"created_at":    m.CreatedAt,
+		"updater":       m.Updater,
+		"updated_at":    m.UpdatedAt,
+	})
+
+	return err
+}
+
+// UpdateInTx 在事务内更新价格与启用状态。
+func (r *PrintPriceConfigRepository) UpdateInTx(ctx context.Context, tx db.Tx, m *model.PrintPriceConfigModel) error {
+	m.FillUpdate(ctx)
+
+	_, err := tx.Table(priceTable).
+		Where("id", m.ID).
+		Update(map[string]any{
+			"price":      m.Price,
+			"status":     m.Status,
+			"updater":    m.Updater,
+			"updated_at": m.UpdatedAt,
+		})
+
+	return err
+}
+
+// DeleteInTx 在事务内物理删除价格规则；不校验影响行数，由调用方先用 FindByRule 判断。
+func (r *PrintPriceConfigRepository) DeleteInTx(ctx context.Context, tx db.Tx, id types.ID) error {
+	_, err := tx.Table(priceTable).Where("id", id).Delete()
+
+	return err
 }
 
 // FindByID 按主键查询；未命中返回 (nil, nil)。
