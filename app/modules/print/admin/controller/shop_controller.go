@@ -171,6 +171,17 @@ func (c *ShopController) StaffIndex(ctx http.Context) http.Response {
 	return result.Success(ctx, list)
 }
 
+// StaffCandidates 搜索可绑定到门店的后台账号，供成员弹窗下拉选择，避免手填雪花 ID。
+// 入参：keyword（用户名 / 昵称 / 手机号，查询串）；返回最多 20 个账号摘要。
+func (c *ShopController) StaffCandidates(ctx http.Context) http.Response {
+	list, err := c.service.SearchStaffCandidates(ctx.Context(), ctx.Request().Query("keyword"))
+	if err != nil {
+		return result.Fail(ctx, err)
+	}
+
+	return result.Success(ctx, list)
+}
+
 // StaffStore 绑定后台账号到门店。
 func (c *ShopController) StaffStore(ctx http.Context) http.Response {
 	id, err := param.PathID(ctx)

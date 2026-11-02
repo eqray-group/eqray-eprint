@@ -1,6 +1,11 @@
 <!-- 门店成员：绑定后台账号后，该账号登录客户端才能登记设备与核销取件 -->
 <template>
-  <ElDialog v-model="dialogVisible" :title="`门店成员${shopName ? ' · ' + shopName : ''}`" width="680px" align-center>
+  <ElDialog
+    v-model="dialogVisible"
+    :title="`门店成员${shopName ? ' · ' + shopName : ''}`"
+    width="680px"
+    align-center
+  >
     <ElAlert
       type="info"
       :closable="false"
@@ -11,8 +16,25 @@
 
     <div class="flex items-end gap-3 mb-4">
       <ElForm :inline="true" :model="bindForm" class="flex-1">
-        <ElFormItem label="后台账号 ID">
-          <ElInput v-model="bindForm.userId" placeholder="system_user.id" style="width: 180px" />
+        <ElFormItem label="后台账号">
+          <ElSelect
+            v-model="bindForm.userId"
+            filterable
+            remote
+            reserve-keyword
+            clearable
+            :remote-method="searchCandidates"
+            :loading="searchingUsers"
+            placeholder="输入用户名 / 昵称 / 手机号搜索"
+            style="width: 260px"
+          >
+            <ElOption
+              v-for="item in candidates"
+              :key="item.id"
+              :label="candidateLabel(item)"
+              :value="String(item.id)"
+            />
+          </ElSelect>
         </ElFormItem>
         <ElFormItem label="角色">
           <ElSelect v-model="bindForm.role" style="width: 120px">
@@ -21,13 +43,23 @@
           </ElSelect>
         </ElFormItem>
       </ElForm>
-      <ElButton v-if="hasAuth('print:staff:create')" type="primary" :loading="binding" @click="handleBind">
+      <ElButton
+        v-if="hasAuth('print:staff:create')"
+        type="primary"
+        :loading="binding"
+        @click="handleBind"
+      >
         绑定
       </ElButton>
     </div>
 
     <ElTable v-loading="loading" :data="staffs" border max-height="360">
-      <ElTableColumn prop="userId" label="后台账号 ID" min-width="180" />
+      <ElTableColumn label="后台账号" min-width="200">
+        <template #default="{ row }">
+          <div class="text-sm">{{ row.nickname || row.username || '账号已删除' }}</div>
+          <div class="text-xs text-g-500">{{ row.username || `ID ${row.userId}` }}</div>
+        </template>
+      </ElTableColumn>
       <ElTableColumn prop="role" label="角色" width="100">
         <template #default="{ row }">
           <ElTag :type="row.role === 'owner' ? 'success' : 'info'" effect="plain">
@@ -64,6 +96,7 @@
   import {
     fetchBindPrintShopStaff,
     fetchGetPrintShopStaffs,
+    fetchSearchPrintShopStaffCandidates,
     fetchUnbindPrintShopStaff
   } from '@/api/print/shop'
 
@@ -92,6 +125,36 @@
   const binding = ref(false)
   const staffs = ref<Api.Print.StaffItem[]>([])
   const bindForm = reactive({ userId: '', role: 'staff' })
+  const candidates = ref<Api.Print.StaffCandidate[]>([])
+  const searchingUsers = ref(false)
+
+  /**
+   * 远程搜索可绑定的后台账号
+   * @param keyword 用户名 / 昵称 / 手机号，空串直接清空候选
+   */
+  const searchCandidates = async (keyword: string): Promise<void> => {
+    const text = keyword.trim()
+    if (!text) {
+      candidates.value = []
+      return
+    }
+
+    searchingUsers.value = true
+    try {
+      candidates.value = await fetchSearchPrintShopStaffCandidates(text)
+    } catch {
+      candidates.value = []
+    } finally {
+      searchingUsers.value = false
+    }
+  }
+
+  /**
+   * 下拉项文案：优先「昵称（用户名）」，没昵称时只显示用户名
+   * @param item 候选账号
+   */
+  const candidateLabel = (item: Api.Print.StaffCandidate): string =>
+    item.nickname ? `${item.nickname}（${item.username}）` : item.username
 
   const loadStaffs = async (): Promise<void> => {
     if (!props.shopId) return
@@ -113,6 +176,7 @@
 
       bindForm.userId = ''
       bindForm.role = 'staff'
+      candidates.value = []
       loadStaffs()
     }
   )
@@ -122,7 +186,7 @@
 
     const userId = bindForm.userId.trim()
     if (!userId) {
-      ElMessage.warning('请输入后台账号 ID')
+      ElMessage.warning('请选择要绑定的后台账号')
       return
     }
 
@@ -131,6 +195,7 @@
       await fetchBindPrintShopStaff(props.shopId, userId, bindForm.role)
       ElMessage.success('绑定成功')
       bindForm.userId = ''
+      candidates.value = []
       loadStaffs()
     } catch {
       // 错误提示已由请求层统一弹出
@@ -143,9 +208,14 @@
     if (!props.shopId) return
 
     try {
-      await ElMessageBox.confirm(`确定解绑账号 ${row.userId} 吗？解绑后该账号立即失去门店权限。`, '解绑成员', {
-        type: 'warning'
-      })
+      const name = row.nickname || row.username || row.userId
+      await ElMessageBox.confirm(
+        `确定解绑账号 ${name} 吗？解绑后该账号立即失去门店权限。`,
+        '解绑成员',
+        {
+          type: 'warning'
+        }
+      )
     } catch {
       return
     }

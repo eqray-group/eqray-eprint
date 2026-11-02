@@ -48,6 +48,8 @@ func Register() {
 			Put("/shops/{id}/audit", shops.Audit)
 
 		// ---------- 门店成员 ----------
+		// 候选账号搜索：按用户名 / 昵称 / 手机号查后台账号，避免手填雪花 ID
+		perm("print:staff:create").Get("/staff-candidates", shops.StaffCandidates)
 		perm("print:staff:list").Get("/shops/{id}/staffs", shops.StaffIndex)
 		perm("print:staff:create").Middleware(operate("打印管理", "绑定门店成员")).
 			Post("/shops/{id}/staffs", shops.StaffStore)
@@ -79,6 +81,9 @@ func Register() {
 		perm("print:price:list").Get("/price-configs/warnings", prices.Warnings)
 		perm("print:price:create").Middleware(operate("打印管理", "新增价格规则")).
 			Post("/price-configs", prices.Store)
+		// SKU 矩阵一次提交 8 个组合：有则改价、无则新增，单价 0 表示该组合下架
+		perm("print:price:update").Middleware(operate("打印管理", "批量保存价格")).
+			Post("/price-configs/batch", prices.SaveBatch)
 		perm("print:price:update").Middleware(operate("打印管理", "修改价格规则")).
 			Put("/price-configs/{id}", prices.Update)
 		perm("print:price:delete").Middleware(operate("打印管理", "删除价格规则")).

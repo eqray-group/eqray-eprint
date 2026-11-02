@@ -54,6 +54,14 @@ export function fetchAuditPrintShop(id: string, auditStatus: number, remark = ''
   })
 }
 
+// 搜索可绑定到门店的后台账号（用户名 / 昵称 / 手机号）
+export function fetchSearchPrintShopStaffCandidates(keyword: string) {
+  return request.get<Api.Print.StaffCandidate[]>({
+    url: '/api/v1/print/staff-candidates',
+    params: { keyword }
+  })
+}
+
 // 门店成员
 export function fetchGetPrintShopStaffs(id: string) {
   return request.get<Api.Print.StaffItem[]>({

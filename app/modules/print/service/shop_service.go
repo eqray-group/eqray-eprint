@@ -42,10 +42,32 @@ type MyShopOption struct {
 	Status int8     `json:"status"`
 }
 
+// StaffCandidate 是可绑定到门店的后台账号候选，供成员弹窗下拉选择。
+type StaffCandidate struct {
+	ID       types.ID `json:"id"`
+	Username string   `json:"username"`
+	Nickname string   `json:"nickname"`
+	Mobile   string   `json:"mobile"`
+}
+
+// ShopStaffItem 是门店成员列表项：绑定信息 + 账号展示字段，
+// 账号被删除时 username / nickname 为空，前端据此提示。
+type ShopStaffItem struct {
+	ID        types.ID       `json:"id"`
+	UserID    types.ID       `json:"userId"`
+	Username  string         `json:"username"`
+	Nickname  string         `json:"nickname"`
+	Mobile    string         `json:"mobile"`
+	Role      string         `json:"role"`
+	Status    int8           `json:"status"`
+	CreatedAt types.DateTime `json:"createdAt"`
+}
+
 // ShopService 负责门店、门店成员与审核。
 type ShopService struct {
 	shops  *repository.PrintShopRepository
 	staffs *repository.PrintShopStaffRepository
+	users  *repository.SystemUserReader
 }
 
 // NewShopService 构造门店服务。
@@ -53,6 +75,7 @@ func NewShopService() *ShopService {
 	return &ShopService{
 		shops:  repository.NewPrintShopRepository(),
 		staffs: repository.NewPrintShopStaffRepository(),
+		users:  repository.NewSystemUserReader(),
 	}
 }
 
@@ -211,9 +234,69 @@ func (s *ShopService) UnbindStaff(ctx context.Context, staffID types.ID) error {
 	return s.staffs.Delete(ctx, staffID)
 }
 
-// ListStaff 查询门店成员。
-func (s *ShopService) ListStaff(ctx context.Context, shopID types.ID) ([]model.PrintShopStaffModel, error) {
-	return s.staffs.ListByShop(ctx, shopID)
+// ListStaff 查询门店成员，并批量回填账号用户名 / 昵称。
+// 参数 shopID 为门店 ID；返回成员列表，账号已被删除时账号字段为空。
+func (s *ShopService) ListStaff(ctx context.Context, shopID types.ID) ([]ShopStaffItem, error) {
+	staffs, err := s.staffs.ListByShop(ctx, shopID)
+	if err != nil {
+		return nil, err
+	}
+	if len(staffs) == 0 {
+		return []ShopStaffItem{}, nil
+	}
+
+	ids := make([]types.ID, 0, len(staffs))
+	for _, staff := range staffs {
+		ids = append(ids, staff.UserID)
+	}
+
+	briefs, err := s.users.ListByIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+
+	accounts := make(map[types.ID]repository.SystemUserBrief, len(briefs))
+	for _, brief := range briefs {
+		accounts[brief.ID] = brief
+	}
+
+	items := make([]ShopStaffItem, 0, len(staffs))
+	for _, staff := range staffs {
+		brief := accounts[staff.UserID]
+		items = append(items, ShopStaffItem{
+			ID:        staff.ID,
+			UserID:    staff.UserID,
+			Username:  brief.Username,
+			Nickname:  brief.Nickname,
+			Mobile:    stringValue(brief.Mobile),
+			Role:      staff.Role,
+			Status:    staff.Status,
+			CreatedAt: staff.CreatedAt,
+		})
+	}
+
+	return items, nil
+}
+
+// SearchStaffCandidates 搜索可绑定到门店的后台账号，最多返回 20 个。
+// 参数 keyword 支持用户名 / 昵称 / 手机号模糊匹配，为空时返回空列表。
+func (s *ShopService) SearchStaffCandidates(ctx context.Context, keyword string) ([]StaffCandidate, error) {
+	briefs, err := s.users.SearchActive(ctx, strings.TrimSpace(keyword), 20)
+	if err != nil {
+		return nil, err
+	}
+
+	items := make([]StaffCandidate, 0, len(briefs))
+	for _, brief := range briefs {
+		items = append(items, StaffCandidate{
+			ID:       brief.ID,
+			Username: brief.Username,
+			Nickname: brief.Nickname,
+			Mobile:   stringValue(brief.Mobile),
+		})
+	}
+
+	return items, nil
 }
 
 // MyShops 查询当前后台账号绑定的门店，客户端登录后据此选门店。
@@ -286,6 +369,15 @@ func validateShopInput(in ShopInput) error {
 	}
 
 	return nil
+}
+
+// stringValue 把可空字符串转成空串，避免响应里出现 null 让前端多做判断。
+func stringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+
+	return *value
 }
 
 // normalizeHours 把空营业时间转成 nil（表示全天营业），并校验非空时必须是 JSON。
