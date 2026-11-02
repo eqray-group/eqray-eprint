@@ -408,6 +408,9 @@ func normalizeTagInput(in *MemberTagSaveInput) error {
   （单例、失败可重试），键名常量也在该文件；不要各自插 script 标签。
 - 门店经纬度只通过高德选点维护：`views/print/shop/modules/shop-location-dialog.vue` 选点后回填
   `longitude / latitude / address`，地址取逆地理编码结果，用户仍可手改。
+- 门店还没有坐标时，选点弹窗打开会自动用 `AMap.Geolocation` 定位到浏览器当前位置并作为默认选点；
+  定位失败（多为非 HTTPS 或用户拒绝授权）只提示，不阻断，仍可搜索或点地图。
+  用户手动点选后定位回调不再覆盖其选择。
 
 ---
 

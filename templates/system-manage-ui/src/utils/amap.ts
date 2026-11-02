@@ -14,10 +14,10 @@ export const AMAP_KEY_CONFIG = 'print.amap.web.key'
 /** 参数配置里存高德安全密钥的键名（JS API 2.0 启用安全密钥后才需要） */
 export const AMAP_SECURITY_CONFIG = 'print.amap.web.security_code'
 
-/** 脚本地址，插件按需加载：地理编码、地点搜索、工具条 */
+/** 脚本地址，插件按需加载：地理编码、地点搜索、浏览器定位、工具条 */
 const AMAP_SCRIPT = 'https://webapi.amap.com/maps?v=2.0'
 
-const AMAP_PLUGINS = 'AMap.Geocoder,AMap.PlaceSearch,AMap.Scale,AMap.ToolBar'
+const AMAP_PLUGINS = 'AMap.Geocoder,AMap.PlaceSearch,AMap.Geolocation,AMap.Scale,AMap.ToolBar'
 
 /** 进行中的加载任务，避免并发重复插入 script */
 let loading: Promise<void> | null = null

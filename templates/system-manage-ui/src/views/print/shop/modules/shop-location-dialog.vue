@@ -50,7 +50,9 @@
         <div ref="mapRef" class="shop-location__map"></div>
 
         <div class="shop-location__result">
-          <span class="text-xs text-g-500">点击地图或拖动标记选点</span>
+          <span class="text-xs text-g-500">
+            {{ locating ? '正在定位当前位置…' : '点击地图或拖动标记选点' }}
+          </span>
           <span class="text-xs">
             {{
               hasPoint
@@ -112,10 +114,14 @@
   const mapRef = ref<HTMLDivElement>()
   const keyword = ref('')
   const searching = ref(false)
+  const locating = ref(false)
   const loading = ref(false)
   const missingKey = ref(false)
   const pois = ref<PoiItem[]>([])
   const point = reactive({ longitude: 0, latitude: 0, address: '' })
+
+  /** 用户是否已手动点选过（点击地图 / 拖标记 / 选搜索结果），用于避免定位结果覆盖手动选择 */
+  let userPicked = false
 
   const hasPoint = computed(() => point.longitude !== 0 || point.latitude !== 0)
 
@@ -137,6 +143,8 @@
       keyword.value = props.address ?? ''
       pois.value = []
       missingKey.value = false
+      locating.value = false
+      userPicked = false
     }
   )
 
@@ -155,6 +163,11 @@
 
       await loadAmap(credentials)
       initMap()
+
+      // 门店还没有坐标时，默认定位到浏览器当前位置，省去手动搜索
+      if (!hasPoint.value) {
+        locate()
+      }
     } catch (error) {
       ElMessage.error((error as Error).message || '地图加载失败')
     } finally {
@@ -185,6 +198,7 @@
 
     marker = new AMap.Marker({ position: center, draggable: true, visible: hasPoint.value })
     marker.on('dragend', (event: any) => {
+      userPicked = true
       moveTo(event.lnglat.getLng(), event.lnglat.getLat(), false)
     })
     map.add(marker)
@@ -193,7 +207,41 @@
     placeSearch = new AMap.PlaceSearch({ pageSize: 10, pageIndex: 1, extensions: 'base' })
 
     map.on('click', (event: any) => {
+      userPicked = true
       moveTo(event.lnglat.getLng(), event.lnglat.getLat(), false)
+    })
+  }
+
+  /**
+   * 定位到浏览器当前位置，作为门店还没坐标时的默认选点
+   * 参数：无；返回 void，定位成功后移动标记并逆地理编码回填地址
+   */
+  const locate = (): void => {
+    const AMap = (window as any).AMap
+    if (!AMap) return
+
+    locating.value = true
+    const geolocation = new AMap.Geolocation({
+      enableHighAccuracy: true,
+      timeout: 8000,
+      showButton: false,
+      panToLocation: false,
+      zoomToAccuracy: false
+    })
+
+    geolocation.getCurrentPosition((status: string, result: any) => {
+      locating.value = false
+
+      // 定位期间用户已经手动选过点，就不覆盖他的选择
+      if (userPicked) return
+
+      if (status !== 'complete' || !result?.position) {
+        // 常见于非 HTTPS 页面或被浏览器拒绝定位权限，让用户改用搜索 / 点选
+        ElMessage.warning('定位失败，请搜索地址或直接点击地图选点')
+        return
+      }
+
+      moveTo(result.position.lng, result.position.lat, true)
     })
   }
 
@@ -259,6 +307,7 @@
     const lat = poi.location?.lat
     if (lng === undefined || lat === undefined) return
 
+    userPicked = true
     moveTo(lng, lat, true)
     point.address = `${poi.pname ?? ''}${poi.address ?? ''}${poi.name ?? ''}`
     pois.value = []
